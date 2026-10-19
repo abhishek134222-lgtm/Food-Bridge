@@ -1,0 +1,64 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodBridge | Food Donation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container nav">
+            <h1>Food<span>Bridge</span></h1>
+            <a href="#donate">Donate Food</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">SHARE FOOD • SPREAD HOPE</p>
+            <h2>Good food deserves<br>another destination.</h2>
+            <p>Connect surplus food with people and communities who need it.</p>
+            <a class="button" href="#donate">Make a Donation</a>
+        </section>
+
+        <section class="section">
+            <h2>Available Donations</h2>
+            <p class="muted">Food currently listed by our donors.</p>
+            <p id="message" role="status" aria-live="polite"></p>
+            <div id="donations" class="donation-grid"></div>
+        </section>
+
+        <section class="section form-section" id="donate">
+            <h2>Donate Food</h2>
+            <p class="muted">Enter the details of food you can share.</p>
+
+            <form id="donationForm">
+                <label for="donor">Donor name</label>
+                <input id="donor" name="donor" required maxlength="80">
+
+                <label for="food">Food description</label>
+                <input id="food" name="food" required maxlength="100"
+                       placeholder="e.g. Fresh vegetables">
+
+                <label for="quantity">Quantity (servings or units)</label>
+                <input id="quantity" name="quantity" type="number"
+                       min="1" max="100000" required>
+
+                <label for="location">Pickup location</label>
+                <input id="location" name="location" required maxlength="150"
+                       placeholder="e.g. Ludhiana">
+
+                <button class="button" type="submit">Submit Donation</button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <p>FoodBridge — Reducing food waste, helping communities.</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

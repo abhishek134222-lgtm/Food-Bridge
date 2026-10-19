@@ -1,0 +1,176 @@
+
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    font-family: Arial, sans-serif;
+    color: #18352b;
+    background: #f7faf7;
+}
+
+body {
+    margin: 0;
+}
+
+.container {
+    width: min(1100px, 90%);
+    margin: auto;
+}
+
+.header {
+    background: white;
+    border-bottom: 1px solid #e2ebe4;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 0;
+}
+
+.nav h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.nav h1 span {
+    color: #21865a;
+}
+
+.nav a {
+    color: #21865a;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.hero {
+    margin-top: 30px;
+    padding: clamp(35px, 7vw, 75px);
+    border-radius: 22px;
+    background: #e4f4e8;
+}
+
+.eyebrow {
+    color: #21865a;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+.hero h2 {
+    margin: 18px 0;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.1;
+}
+
+.hero p:not(.eyebrow) {
+    max-width: 500px;
+    line-height: 1.7;
+    color: #52685d;
+}
+
+.button {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 13px 20px;
+    border: 0;
+    border-radius: 9px;
+    background: #21865a;
+    color: white;
+    font-weight: bold;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.button:hover {
+    background: #176b46;
+}
+
+.section {
+    padding: 40px 0;
+}
+
+.section h2 {
+    margin-bottom: 8px;
+}
+
+.muted {
+    color: #68796f;
+}
+
+.donation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+}
+
+.donation-card {
+    padding: 22px;
+    border: 1px solid #e1eae3;
+    border-radius: 15px;
+    background: white;
+    overflow-wrap: anywhere;
+}
+
+.donation-card h3 {
+    margin-top: 0;
+}
+
+.status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #e4f4e8;
+    color: #176b46;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.form-section {
+    max-width: 650px;
+}
+
+form {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccd9cf;
+    border-radius: 8px;
+    font: inherit;
+}
+
+input:focus {
+    outline: 2px solid #21865a;
+    outline-offset: 1px;
+}
+
+form .button {
+    justify-self: start;
+}
+
+footer {
+    margin-top: 30px;
+    padding: 25px;
+    background: #18352b;
+    color: white;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .nav h1 {
+        font-size: 22px;
+    }
+
+    .hero {
+        border-radius: 14px;
+    }
+}
