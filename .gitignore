@@ -1,6 +1,17 @@
 
+# Compiled Java files
 out/
-build/
 *.class
+
+# Secrets and local configuration
 .env
+.env.*
+!.env.example
+application-local.properties
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
 *.log

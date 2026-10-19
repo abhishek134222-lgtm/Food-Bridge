@@ -4,59 +4,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FoodBridge | Food Donation</title>
+    <meta name="theme-color" content="#116149">
+    <title>FoodBridge | Share Food, Spread Hope</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header class="header">
-        <div class="container nav">
-            <h1>Food<span>Bridge</span></h1>
-            <a href="#donate">Donate Food</a>
-        </div>
+        <nav class="container nav">
+            <a class="brand" href="index.html" aria-label="FoodBridge home">
+                <span class="brand-icon">FB</span>
+                <span>Food<span class="brand-accent">Bridge</span></span>
+            </a>
+
+            <div class="nav-links">
+                <a href="auth.html">Login / Register</a>
+                <a href="#donations-section">Donations</a>
+                <a class="nav-cta" href="#donate">Donate Food <span>↗</span></a>
+            </div>
+        </nav>
     </header>
 
-    <main class="container">
-        <section class="hero">
-            <p class="eyebrow">SHARE FOOD • SPREAD HOPE</p>
-            <h2>Good food deserves<br>another destination.</h2>
-            <p>Connect surplus food with people and communities who need it.</p>
-            <a class="button" href="#donate">Make a Donation</a>
+    <main>
+        <section class="hero container">
+            <div class="hero-content">
+                <span class="eyebrow">
+                    <span class="live-dot"></span> FOOD SHARED. LIVES CHANGED.
+                </span>
+
+                <h1>Good food deserves<br>
+                    <span>another destination.</span>
+                </h1>
+
+                <p class="hero-description">
+                    Turn surplus food into hope. Connect with your community,
+                    reduce food waste, and help good food reach people who need it.
+                </p>
+
+                <div class="hero-actions">
+                    <a class="button button-primary" href="#donate">
+                        Donate food <span>→</span>
+                    </a>
+                    <a class="button button-secondary" href="#donations-section">
+                        Explore donations
+                    </a>
+                </div>
+
+                <div class="hero-note">
+                    <span class="note-icon">♥</span>
+                    <span>Small acts of sharing can make a big difference.</span>
+                </div>
+            </div>
+
+            <div class="hero-visual" aria-label="Food sharing illustration">
+                <div class="visual-circle circle-one"></div>
+                <div class="visual-circle circle-two"></div>
+                <div class="food-emoji" aria-hidden="true">🥗</div>
+
+                <div class="floating-card floating-top">
+                    <span class="floating-icon">♧</span>
+                    <span>
+                        <strong>Share more</strong>
+                        <small>Waste less</small>
+                    </span>
+                </div>
+
+                <div class="floating-card floating-bottom">
+                    <span class="heart-icon">♥</span>
+                    <span>
+                        <strong>Made with care</strong>
+                        <small>For our community</small>
+                    </span>
+                </div>
+
+                <span class="decor decor-one">✳</span>
+                <span class="decor decor-two">✦</span>
+            </div>
         </section>
 
-        <section class="section">
-            <h2>Available Donations</h2>
-            <p class="muted">Food currently listed by our donors.</p>
-            <p id="message" role="status" aria-live="polite"></p>
+        <section class="impact-strip container" aria-label="Our mission">
+            <div class="impact-item">
+                <span class="impact-icon">♧</span>
+                <div>
+                    <strong>Reduce food waste</strong>
+                    <p>Give surplus food a purpose</p>
+                </div>
+            </div>
+
+            <div class="impact-item">
+                <span class="impact-icon">♡</span>
+                <div>
+                    <strong>Support communities</strong>
+                    <p>Make sharing easier</p>
+                </div>
+            </div>
+
+            <div class="impact-item">
+                <span class="impact-icon">✳</span>
+                <div>
+                    <strong>Create an impact</strong>
+                    <p>One donation at a time</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section container" id="donations-section">
+            <div class="section-heading">
+                <div>
+                    <span class="eyebrow">FROM OUR COMMUNITY</span>
+                    <h2>Food up for sharing<span class="heading-dot">.</span></h2>
+                    <p class="muted">
+                        Discover food donations listed by our community.
+                    </p>
+                </div>
+
+                <button id="refreshButton"
+                        class="button button-secondary refresh-button"
+                        type="button">
+                    <span aria-hidden="true">↻</span> Refresh
+                </button>
+            </div>
+
+            <div class="filter-bar">
+                <label class="search-box">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="searchInput" type="search"
+                           placeholder="Search food, donor or location..."
+                           aria-label="Search donations">
+                </label>
+
+                <label class="filter-select">
+                    <span class="sr-only">Filter donations by status</span>
+                    <select id="statusFilter">
+                        <option value="ALL">All statuses</option>
+                        <option value="AVAILABLE">Available</option>
+                        <option value="CLAIMED">Claimed</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="CANCELLED">Cancelled</option>
+                    </select>
+                </label>
+            </div>
+
+            <p id="message" class="message" role="status" aria-live="polite">
+                Loading donations...
+            </p>
+
             <div id="donations" class="donation-grid"></div>
         </section>
 
-        <section class="section form-section" id="donate">
-            <h2>Donate Food</h2>
-            <p class="muted">Enter the details of food you can share.</p>
+        <section class="donate-section" id="donate">
+            <div class="container donate-layout">
+                <div class="donate-intro">
+                    <span class="eyebrow eyebrow-light">
+                        BE SOMEONE'S REASON TO SMILE
+                    </span>
 
-            <form id="donationForm">
-                <label for="donor">Donor name</label>
-                <input id="donor" name="donor" required maxlength="80">
+                    <h2>Have extra food?<br>Share the goodness.</h2>
 
-                <label for="food">Food description</label>
-                <input id="food" name="food" required maxlength="100"
-                       placeholder="e.g. Fresh vegetables">
+                    <p>
+                        Your donation can help reduce waste and bring people
+                        together. Add your donation details to get started.
+                    </p>
 
-                <label for="quantity">Quantity (servings or units)</label>
-                <input id="quantity" name="quantity" type="number"
-                       min="1" max="100000" required>
+                    <div class="donate-points">
+                        <p><span>✓</span> Simple donation process</p>
+                        <p><span>✓</span> Help your local community</p>
+                        <p><span>✓</span> Make surplus food count</p>
+                    </div>
+                </div>
 
-                <label for="location">Pickup location</label>
-                <input id="location" name="location" required maxlength="150"
-                       placeholder="e.g. Ludhiana">
+                <div class="form-card">
+                    <div class="form-heading">
+                        <div>
+                            <span class="eyebrow">MAKE A DIFFERENCE</span>
+                            <h3>List a food donation</h3>
+                        </div>
+                        <span class="form-icon" aria-hidden="true">♥</span>
+                    </div>
 
-                <button class="button" type="submit">Submit Donation</button>
-            </form>
+                    <p class="muted form-subtitle">
+                        Fill in the details below to share food.
+                    </p>
+
+                    <form id="donationForm">
+                        <div class="form-field">
+                            <label for="donor">Donor name</label>
+                            <input id="donor" name="donor" required maxlength="80"
+                                   autocomplete="name"
+                                   placeholder="Enter your name">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="food">Food description</label>
+                            <input id="food" name="food" required maxlength="100"
+                                   placeholder="e.g. Fresh vegetables, cooked meals">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="quantity">Quantity</label>
+                            <input id="quantity" name="quantity" type="number"
+                                   min="1" max="100000" step="1" required
+                                   placeholder="e.g. 25">
+                            <small>Enter the number of servings or units.</small>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="location">Pickup location</label>
+                            <input id="location" name="location" required
+                                   maxlength="150" autocomplete="street-address"
+                                   placeholder="e.g. Ludhiana">
+                        </div>
+
+                        <button id="submitButton"
+                                class="button button-primary submit-button"
+                                type="submit">
+                            Submit donation <span>→</span>
+                        </button>
+
+                        <p class="privacy-note">
+                            By donating, you help make food sharing possible
+                            in your community.
+                        </p>
+                    </form>
+                </div>
+            </div>
         </section>
     </main>
 
-    <footer>
-        <p>FoodBridge — Reducing food waste, helping communities.</p>
+    <footer class="footer">
+        <div class="container footer-content">
+            <a class="brand footer-brand" href="index.html">
+                <span class="brand-icon">FB</span>
+                <span>Food<span class="brand-accent">Bridge</span></span>
+            </a>
+
+            <p>Reducing food waste. Sharing hope. Building community.</p>
+            <span class="copyright">Made for a better tomorrow ♥</span>
+        </div>
     </footer>
 
     <script src="app.js"></script>
