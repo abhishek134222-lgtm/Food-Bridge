@@ -1,15 +1,21 @@
 
 package com.foodbridge.server;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 
 import javax.crypto.SecretKeyFactory;
@@ -21,12 +27,110 @@ public class AuthStore {
     private static final int ITERATIONS = 210000;
     private static final int KEY_LENGTH = 256;
 
+    private static final Path DATA_DIR =
+            Paths.get("data").toAbsolutePath();
+
+    private static final Path USERS_FILE =
+            DATA_DIR.resolve("users.dat");
+
     public record User(
             long id, String fullName, String email, String role) {
     }
 
-    // Register a new user
-    public static User register(
+    private static class StoredUser implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        long id;
+        String fullName;
+        String email;
+        String role;
+        String passwordHash;
+
+        StoredUser(long id, String fullName, String email,
+                   String role, String passwordHash) {
+            this.id = id;
+            this.fullName = fullName;
+            this.email = email;
+            this.role = role;
+            this.passwordHash = passwordHash;
+        }
+
+        User toUser() {
+            return new User(id, fullName, email, role);
+        }
+    }
+
+    private static List<StoredUser> readUsers() {
+        try {
+            Files.createDirectories(DATA_DIR);
+
+            if (!Files.exists(USERS_FILE)) {
+                return new ArrayList<>();
+            }
+
+            try (ObjectInputStream input = new ObjectInputStream(
+                    Files.newInputStream(USERS_FILE))) {
+
+                Object object = input.readObject();
+
+                if (!(object instanceof ArrayList<?> list)) {
+                    throw new IllegalStateException(
+                            "Invalid users data file.");
+                }
+
+                List<StoredUser> users = new ArrayList<>();
+
+                for (Object item : list) {
+                    if (!(item instanceof StoredUser user)) {
+                        throw new IllegalStateException(
+                                "Invalid user record in data file.");
+                    }
+                    users.add(user);
+                }
+
+                return users;
+            }
+
+        } catch (IOException | ClassNotFoundException e) {
+            throw new IllegalStateException(
+                    "Could not read user data. Keep a backup of data/users.dat.",
+                    e);
+        }
+    }
+
+    private static void saveUsers(List<StoredUser> users) {
+        try {
+            Files.createDirectories(DATA_DIR);
+
+            Path temporaryFile =
+                    DATA_DIR.resolve("users.tmp");
+
+            try (ObjectOutputStream output =
+                    new ObjectOutputStream(
+                            Files.newOutputStream(temporaryFile))) {
+                output.writeObject(new ArrayList<>(users));
+            }
+
+            try {
+                Files.move(
+                        temporaryFile,
+                        USERS_FILE,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException e) {
+                Files.move(
+                        temporaryFile,
+                        USERS_FILE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Could not save user data.", e);
+        }
+    }
+
+    public static synchronized User register(
             String fullName, String email,
             String password, String role) {
 
@@ -62,50 +166,33 @@ public class AuthStore {
                     "Choose Donor or Receiver.");
         }
 
-        String passwordHash = hashPassword(password);
+        List<StoredUser> users = readUsers();
 
-        String sql = """
-            INSERT INTO public.users
-                (full_name, email, password_hash, role)
-            VALUES (?, ?, ?, ?)
-            RETURNING id, full_name, email, role
-            """;
-
-        try (Connection connection = Database.getConnection();
-             PreparedStatement statement =
-                    connection.prepareStatement(sql)) {
-
-            statement.setString(1, fullName);
-            statement.setString(2, email);
-            statement.setString(3, passwordHash);
-            statement.setString(4, role);
-
-            try (ResultSet result = statement.executeQuery()) {
-                if (result.next()) {
-                    return new User(
-                            result.getLong("id"),
-                            result.getString("full_name"),
-                            result.getString("email"),
-                            result.getString("role"));
-                }
-            }
-
-            throw new IllegalStateException(
-                    "Registration failed.");
-
-        } catch (SQLException e) {
-            if ("23505".equals(e.getSQLState())) {
+        for (StoredUser user : users) {
+            if (user.email.equals(email)) {
                 throw new IllegalArgumentException(
                         "An account with this email already exists.");
             }
-
-            throw new IllegalStateException(
-                    "Could not register user in the database.", e);
         }
+
+        long nextId = users.stream()
+                .mapToLong(user -> user.id)
+                .max()
+                .orElse(0L) + 1L;
+
+        String passwordHash = hashPassword(password);
+
+        StoredUser newUser = new StoredUser(
+                nextId, fullName, email, role, passwordHash);
+
+        users.add(newUser);
+        saveUsers(users);
+
+        return newUser.toUser();
     }
 
-    // Verify login credentials
-    public static User login(String email, String password) {
+    public static synchronized User login(
+            String email, String password) {
 
         if (email == null || password == null
                 || email.isBlank() || password.isEmpty()
@@ -114,45 +201,18 @@ public class AuthStore {
             return null;
         }
 
-        String sql = """
-            SELECT id, full_name, email, role, password_hash
-            FROM public.users
-            WHERE email = ?
-            """;
+        email = email.trim().toLowerCase(Locale.ROOT);
 
-        try (Connection connection = Database.getConnection();
-             PreparedStatement statement =
-                    connection.prepareStatement(sql)) {
-
-            statement.setString(
-                    1, email.trim().toLowerCase(Locale.ROOT));
-
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    return null;
-                }
-
-                String storedHash =
-                        result.getString("password_hash");
-
-                if (!verifyPassword(password, storedHash)) {
-                    return null;
-                }
-
-                return new User(
-                        result.getLong("id"),
-                        result.getString("full_name"),
-                        result.getString("email"),
-                        result.getString("role"));
+        for (StoredUser user : readUsers()) {
+            if (user.email.equals(email)
+                    && verifyPassword(password, user.passwordHash)) {
+                return user.toUser();
             }
-
-        } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Could not check login credentials.", e);
         }
+
+        return null;
     }
 
-    // Create a salted password hash
     private static String hashPassword(String password) {
         byte[] salt = new byte[16];
         RANDOM.nextBytes(salt);
@@ -165,7 +225,6 @@ public class AuthStore {
                 + Base64.getEncoder().encodeToString(hash);
     }
 
-    // Compare entered password with stored hash
     private static boolean verifyPassword(
             String password, String storedHash) {
 
@@ -197,7 +256,6 @@ public class AuthStore {
         }
     }
 
-    // PBKDF2 password derivation
     private static byte[] derive(
             char[] password, byte[] salt, int iterations) {
 

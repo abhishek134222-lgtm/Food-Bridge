@@ -1,0 +1,142 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FoodBridge | Receiver Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dashboard { max-width:1000px; margin:45px auto; padding:20px; }
+        .dash-card { background:white; padding:24px; border-radius:14px; margin:20px 0; }
+        .dash-list { display:grid; gap:14px; }
+        .food-item { background:#f0f7f3; padding:18px; border-radius:10px; }
+        .food-item button, .logout { padding:11px 16px; cursor:pointer; }
+        #notice { white-space:pre-wrap; }
+    </style>
+</head>
+<body>
+<header class="header">
+    <nav class="container nav">
+        <a class="brand" href="index.html">FoodBridge</a>
+        <button class="logout" id="logoutButton">Logout</button>
+    </nav>
+</header>
+
+<main class="dashboard">
+    <h1>Receiver Dashboard</h1>
+    <p id="welcome">Checking your account...</p>
+    <p id="notice" role="status"></p>
+
+    <section class="dash-card">
+        <h2>Available Food Donations</h2>
+        <button id="refreshButton" type="button">Refresh Donations</button>
+        <div id="donations" class="dash-list"></div>
+    </section>
+</main>
+
+<script>
+const notice = document.getElementById("notice");
+
+async function request(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            ...(options.body ? {"Content-Type":"application/json"} : {})
+        }
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Request failed");
+    return data;
+}
+
+function showError(error) {
+    notice.textContent = error.message;
+}
+
+async function checkUser() {
+    try {
+        const user = await request("/api/me");
+        if (user.role !== "RECEIVER") {
+            window.location.replace(
+                user.role === "DONOR" ? "donor.html" : "auth.html"
+            );
+            return false;
+        }
+        document.getElementById("welcome").textContent =
+            "Welcome, " + user.fullName + "!";
+        return true;
+    } catch (error) {
+        window.location.replace("auth.html");
+        return false;
+    }
+}
+
+async function loadDonations() {
+    try {
+        const donations = await request("/api/donations");
+        const list = document.getElementById("donations");
+        list.replaceChildren();
+
+        const available = donations.filter(d => d.status === "AVAILABLE");
+
+        if (!available.length) {
+            list.textContent = "No available donations at the moment.";
+            return;
+        }
+
+        available.forEach(d => {
+            const item = document.createElement("div");
+            item.className = "food-item";
+
+            const title = document.createElement("h3");
+            title.textContent = d.food;
+
+            const details = document.createElement("p");
+            details.textContent =
+                "Donor: " + d.donor + " | Quantity: " + d.quantity +
+                " | Pickup: " + d.location;
+
+            const button = document.createElement("button");
+            button.textContent = "Claim Donation";
+            button.addEventListener("click", async () => {
+                button.disabled = true;
+                try {
+                    await request("/api/donations/" + d.id + "/status", {
+                        method: "PUT",
+                        body: JSON.stringify({status:"CLAIMED"})
+                    });
+                    notice.textContent = "Donation claimed successfully!";
+                    await loadDonations();
+                } catch (error) {
+                    showError(error);
+                    button.disabled = false;
+                }
+            });
+
+            item.append(title, details, button);
+            list.appendChild(item);
+        });
+    } catch (error) {
+        showError(error);
+    }
+}
+
+document.getElementById("refreshButton").addEventListener("click", loadDonations);
+
+document.getElementById("logoutButton").addEventListener("click", async () => {
+    try {
+        await request("/api/logout", {method:"POST"});
+    } finally {
+        window.location.replace("auth.html");
+    }
+});
+
+(async () => {
+    if (await checkUser()) await loadDonations();
+})();
+</script>
+</body>
+</html>

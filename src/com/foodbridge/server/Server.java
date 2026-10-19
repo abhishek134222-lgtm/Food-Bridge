@@ -10,14 +10,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Server {
 
     public static void main(String[] args) throws IOException {
+        int port = 8080;
+        String configuredPort = System.getenv("PORT");
+
+        if (configuredPort != null && !configuredPort.isBlank()) {
+            try {
+                port = Integer.parseInt(configuredPort);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                        "The PORT environment variable must be a number.");
+            }
+        }
+
         HttpServer server = HttpServer.create(
-                new InetSocketAddress(8080), 0);
+                new InetSocketAddress(port), 0);
 
         server.createContext("/api/donations", Server::handleDonations);
         server.createContext("/api/register", Server::handleRegister);
@@ -29,7 +42,9 @@ public class Server {
         server.start();
 
         System.out.println(
-                "FoodBridge server started at http://localhost:8080");
+                "FoodBridge server started on port " + port);
+        System.out.println(
+                "Open http://localhost:" + port + " in your browser.");
     }
 
     // ---------------- WEBSITE ----------------
@@ -43,14 +58,14 @@ public class Server {
             return;
         }
 
-        String path = exchange.getRequestURI().getPath();
+        String requestPath = exchange.getRequestURI().getPath();
 
-        if (path.equals("/")) {
-            path = "/index.html";
+        if (requestPath.equals("/")) {
+            requestPath = "/index.html";
         }
 
         Path webRoot = Path.of("web").toAbsolutePath().normalize();
-        Path file = webRoot.resolve(path.substring(1)).normalize();
+        Path file = webRoot.resolve(requestPath.substring(1)).normalize();
 
         if (!file.startsWith(webRoot) || !Files.isRegularFile(file)) {
             sendJson(exchange, 404,
@@ -58,18 +73,29 @@ public class Server {
             return;
         }
 
-        String contentType = switch (file.getFileName().toString()) {
-            case "html" -> "text/html; charset=UTF-8";
-            default -> switch (file.getFileName().toString()) {
-                case "index.html", "auth.html" ->
-                        "text/html; charset=UTF-8";
-                case "style.css" -> "text/css; charset=UTF-8";
-                case "app.js" -> "text/javascript; charset=UTF-8";
-                default -> "application/octet-stream";
-            };
-        };
+        String filename = file.getFileName().toString();
 
-        byte[] data = readFile(file);
+        String contentType;
+        if (filename.endsWith(".html")) {
+            contentType = "text/html; charset=UTF-8";
+        } else if (filename.endsWith(".css")) {
+            contentType = "text/css; charset=UTF-8";
+        } else if (filename.endsWith(".js")) {
+            contentType = "text/javascript; charset=UTF-8";
+        } else if (filename.endsWith(".json")) {
+            contentType = "application/json; charset=UTF-8";
+        } else if (filename.endsWith(".png")) {
+            contentType = "image/png";
+        } else if (filename.endsWith(".jpg")
+                || filename.endsWith(".jpeg")) {
+            contentType = "image/jpeg";
+        } else if (filename.endsWith(".svg")) {
+            contentType = "image/svg+xml";
+        } else {
+            contentType = "application/octet-stream";
+        }
+
+        byte[] data = Files.readAllBytes(file);
 
         exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
@@ -80,10 +106,6 @@ public class Server {
         }
     }
 
-    private static byte[] readFile(Path file) throws IOException {
-        return Files.readAllBytes(file);
-    }
-
     // ---------------- DONATIONS API ----------------
 
     private static void handleDonations(HttpExchange exchange)
@@ -92,96 +114,8 @@ public class Server {
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
 
-        // Update donation status
-        if ("PUT".equalsIgnoreCase(method)) {
-
-            Pattern route = Pattern.compile(
-                    "^/api/donations/(\\d+)/status/?$");
-
-            Matcher matcher = route.matcher(path);
-
-            if (!matcher.matches()) {
-                sendJson(exchange, 404,
-                        "{\"error\":\"Invalid donation status URL\"}");
-                return;
-            }
-
-            int id;
-
-            try {
-                id = Integer.parseInt(matcher.group(1));
-                if (id <= 0) {
-                    throw new NumberFormatException();
-                }
-            } catch (NumberFormatException e) {
-                sendJson(exchange, 400,
-                        "{\"error\":\"Invalid donation ID\"}");
-                return;
-            }
-
-            String body = new String(
-                    exchange.getRequestBody().readAllBytes(),
-                    StandardCharsets.UTF_8);
-
-            String status = getString(body, "status");
-
-            if (status == null) {
-                sendJson(exchange, 400,
-                        "{\"error\":\"Provide a valid status\"}");
-                return;
-            }
-
-            String requestedStatus = status.toUpperCase();
-
-            try {
-                if ("CLAIMED".equals(requestedStatus)) {
-                    boolean claimed = DonationStore.claimDonation(id);
-
-                    if (!claimed) {
-                        sendJson(exchange, 409,
-                                "{\"error\":\"Donation is no longer available. Refresh and try again.\"}");
-                        return;
-                    }
-
-                    sendJson(exchange, 200,
-                            "{\"message\":\"Donation claimed successfully\",\"id\":"
-                                    + id + ",\"status\":\"CLAIMED\"}");
-                    return;
-                }
-
-                if (!requestedStatus.equals("AVAILABLE")
-                        && !requestedStatus.equals("COMPLETED")
-                        && !requestedStatus.equals("CANCELLED")) {
-                    sendJson(exchange, 400,
-                            "{\"error\":\"Invalid donation status\"}");
-                    return;
-                }
-
-                boolean updated =
-                        DonationStore.updateStatus(id, requestedStatus);
-
-                if (!updated) {
-                    sendJson(exchange, 404,
-                            "{\"error\":\"Donation not found or not updated\"}");
-                    return;
-                }
-
-                sendJson(exchange, 200,
-                        "{\"message\":\"Donation status updated\",\"id\":"
-                                + id + ",\"status\":\""
-                                + escape(requestedStatus) + "\"}");
-
-            } catch (IllegalStateException e) {
-                e.printStackTrace();
-                sendJson(exchange, 500,
-                        "{\"error\":\"Could not update donation status\"}");
-            }
-
-            return;
-        }
-
         // List donations
-        if ("GET".equalsIgnoreCase(method)) {
+        if ("GET".equalsIgnoreCase(method) && path.equals("/api/donations")) {
             try {
                 List<Donation> donations = DonationStore.getAll();
                 StringBuilder json = new StringBuilder("[");
@@ -204,35 +138,159 @@ public class Server {
             return;
         }
 
-        // Create donation
-        if ("POST".equalsIgnoreCase(method)) {
+        // Create a donation: logged-in donors only
+        if ("POST".equalsIgnoreCase(method)
+                && path.equals("/api/donations")) {
+
+            AuthStore.User user = currentUser(exchange);
+
+            if (user == null) {
+                sendJson(exchange, 401,
+                        "{\"error\":\"Please log in first\"}");
+                return;
+            }
+
+            if (!"DONOR".equals(user.role())) {
+                sendJson(exchange, 403,
+                        "{\"error\":\"Only donors can add donations\"}");
+                return;
+            }
+
             String body = new String(
                     exchange.getRequestBody().readAllBytes(),
                     StandardCharsets.UTF_8);
 
-            String donor = getString(body, "donor");
             String food = getString(body, "food");
             String location = getString(body, "location");
             int quantity = getInteger(body, "quantity");
 
-            if (donor == null || food == null || location == null
-                    || donor.isBlank() || food.isBlank()
-                    || location.isBlank()
+            if (food == null || location == null
+                    || food.isBlank() || location.isBlank()
                     || quantity <= 0 || quantity > 100000) {
                 sendJson(exchange, 400,
-                        "{\"error\":\"Provide valid donor, food, quantity, and location\"}");
+                        "{\"error\":\"Provide valid food, quantity, and location\"}");
                 return;
             }
 
             try {
                 Donation donation = DonationStore.add(
-                        donor, food, quantity, location);
+        user.id(), user.fullName(), food, quantity, location);
+
                 sendJson(exchange, 201, toJson(donation));
 
+            } catch (IllegalArgumentException e) {
+                sendJson(exchange, 400,
+                        "{\"error\":\"" + escape(e.getMessage()) + "\"}");
             } catch (IllegalStateException e) {
                 e.printStackTrace();
                 sendJson(exchange, 500,
                         "{\"error\":\"Could not save donation\"}");
+            }
+            return;
+        }
+
+        // Update a donation's status
+        if ("PUT".equalsIgnoreCase(method)) {
+            Pattern route = Pattern.compile(
+                    "^/api/donations/(\\d+)/status/?$");
+
+            Matcher matcher = route.matcher(path);
+
+            if (!matcher.matches()) {
+                sendJson(exchange, 404,
+                        "{\"error\":\"Invalid donation status URL\"}");
+                return;
+            }
+
+            AuthStore.User user = currentUser(exchange);
+
+            if (user == null) {
+                sendJson(exchange, 401,
+                        "{\"error\":\"Please log in first\"}");
+                return;
+            }
+
+            int id;
+            try {
+                id = Integer.parseInt(matcher.group(1));
+                if (id <= 0) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException e) {
+                sendJson(exchange, 400,
+                        "{\"error\":\"Invalid donation ID\"}");
+                return;
+            }
+
+            String body = new String(
+                    exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8);
+
+            String requested = getString(body, "status");
+
+            if (requested == null) {
+                sendJson(exchange, 400,
+                        "{\"error\":\"Provide a valid status\"}");
+                return;
+            }
+
+            String status = requested.toUpperCase(Locale.ROOT);
+
+            try {
+                if ("CLAIMED".equals(status)) {
+                    if (!"RECEIVER".equals(user.role())) {
+                        sendJson(exchange, 403,
+                                "{\"error\":\"Only receivers can claim donations\"}");
+                        return;
+                    }
+
+                    boolean claimed = DonationStore.claimDonation(id);
+
+                    if (!claimed) {
+                        sendJson(exchange, 409,
+                                "{\"error\":\"Donation is no longer available. Refresh and try again.\"}");
+                        return;
+                    }
+
+                    sendJson(exchange, 200,
+                            "{\"message\":\"Donation claimed successfully\","
+                                    + "\"id\":" + id
+                                    + ",\"status\":\"CLAIMED\"}");
+                    return;
+                }
+
+                if (!"DONOR".equals(user.role())) {
+                    sendJson(exchange, 403,
+                            "{\"error\":\"Only donors can update these statuses\"}");
+                    return;
+                }
+
+                if (!status.equals("AVAILABLE")
+                        && !status.equals("COMPLETED")
+                        && !status.equals("CANCELLED")) {
+                    sendJson(exchange, 400,
+                            "{\"error\":\"Invalid donation status\"}");
+                    return;
+                }
+
+                boolean updated =
+        DonationStore.updateStatus(id, status, user.id());
+
+                if (!updated) {
+                    sendJson(exchange, 404,
+                            "{\"error\":\"Donation not found or not updated\"}");
+                    return;
+                }
+
+                sendJson(exchange, 200,
+                        "{\"message\":\"Donation status updated\","
+                                + "\"id\":" + id
+                                + ",\"status\":\"" + escape(status) + "\"}");
+
+            } catch (IllegalStateException e) {
+                e.printStackTrace();
+                sendJson(exchange, 500,
+                        "{\"error\":\"Could not update donation status\"}");
             }
             return;
         }
@@ -349,10 +407,12 @@ public class Server {
 
         AuthSessions.remove(sessionToken(exchange));
 
-        exchange.getResponseHeaders().add(
-                "Set-Cookie",
-                "FBSESSION=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+        String cookie = "FBSESSION=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+        if (isHttps(exchange)) {
+            cookie += "; Secure";
+        }
 
+        exchange.getResponseHeaders().add("Set-Cookie", cookie);
         sendJson(exchange, 200, "{\"message\":\"Logged out\"}");
     }
 
@@ -361,10 +421,21 @@ public class Server {
     private static void setSessionCookie(
             HttpExchange exchange, String token) {
 
-        exchange.getResponseHeaders().add(
-                "Set-Cookie",
-                "FBSESSION=" + token
-                        + "; Path=/; HttpOnly; SameSite=Strict");
+        String cookie = "FBSESSION=" + token
+                + "; Path=/; HttpOnly; SameSite=Strict";
+
+        if (isHttps(exchange)) {
+            cookie += "; Secure";
+        }
+
+        exchange.getResponseHeaders().add("Set-Cookie", cookie);
+    }
+
+    private static boolean isHttps(HttpExchange exchange) {
+        String forwarded = exchange.getRequestHeaders()
+                .getFirst("X-Forwarded-Proto");
+
+        return forwarded != null && forwarded.equalsIgnoreCase("https");
     }
 
     private static String sessionToken(HttpExchange exchange) {
@@ -404,17 +475,27 @@ public class Server {
     private static String getString(String json, String key) {
         Pattern pattern = Pattern.compile(
                 "\"" + Pattern.quote(key)
-                        + "\"\\s*:\\s*\"([^\"\\\\]*)\"");
+                        + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
 
         Matcher matcher = pattern.matcher(json);
 
-        return matcher.find() ? matcher.group(1).trim() : null;
+        if (!matcher.find()) {
+            return null;
+        }
+
+        return matcher.group(1)
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .trim();
     }
 
     private static int getInteger(String json, String key) {
         Pattern pattern = Pattern.compile(
                 "\"" + Pattern.quote(key)
-                        + "\"\\s*:\\s*(\\d+)");
+                        + "\"\\s*:\\s*(-?\\d+)");
 
         Matcher matcher = pattern.matcher(json);
 
