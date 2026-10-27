@@ -30,7 +30,7 @@ public class Server {
         }
 
         HttpServer server = HttpServer.create(
-                new InetSocketAddress(port), 0);
+                new InetSocketAddress("0.0.0.0", port), 0);
 
         server.createContext("/api/donations", Server::handleDonations);
         server.createContext("/api/register", Server::handleRegister);
