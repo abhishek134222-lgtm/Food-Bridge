@@ -32,6 +32,8 @@ public class Server {
         HttpServer server = HttpServer.create(
                 new InetSocketAddress("0.0.0.0", port), 0);
 
+        Database.init();
+
         server.createContext("/api/health", Server::handleHealth);
         server.createContext("/api/donations", Server::handleDonations);
         server.createContext("/api/register", Server::handleRegister);

@@ -1,4 +1,3 @@
-
 package com.foodbridge.server;
 
 import java.io.IOException;
@@ -9,6 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -76,9 +79,6 @@ public class DonationStore {
                         throw new IllegalStateException(
                                 "Invalid donation record in data file.");
                     }
-
-                    // Old records have ownerId = 0.
-                    // Do not guess their owners.
                     donations.add(donation);
                 }
 
@@ -136,6 +136,31 @@ public class DonationStore {
     }
 
     public static synchronized List<Donation> getAll() {
+        // 1. Neon PostgreSQL persistence
+        if (Database.isConfigured()) {
+            String sql = "SELECT id, donor, food, quantity, location, status FROM donations ORDER BY id DESC";
+            List<Donation> list = new ArrayList<>();
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
+
+                while (rs.next()) {
+                    list.add(new Donation(
+                            (int) rs.getLong("id"),
+                            rs.getString("donor"),
+                            rs.getString("food"),
+                            rs.getInt("quantity"),
+                            rs.getString("location"),
+                            formatStatus(rs.getString("status"))
+                    ));
+                }
+                return list;
+            } catch (SQLException e) {
+                System.err.println("Database query error: " + e.getMessage());
+            }
+        }
+
+        // 2. File-based fallback persistence
         List<StoredDonation> stored = readDonations();
         List<Donation> result = new ArrayList<>();
 
@@ -149,7 +174,6 @@ public class DonationStore {
         return result;
     }
 
-    // ownerId comes from the authenticated account, never from the browser.
     public static synchronized Donation add(
             long ownerId, String donor, String food,
             int quantity, String location) {
@@ -163,6 +187,30 @@ public class DonationStore {
                     "Enter valid donor, food, quantity and location.");
         }
 
+        // 1. Neon PostgreSQL persistence
+        if (Database.isConfigured()) {
+            String sql = "INSERT INTO donations (owner_id, donor, food, quantity, location, status) VALUES (?, ?, ?, ?, ?, 'AVAILABLE') RETURNING id";
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setLong(1, ownerId);
+                stmt.setString(2, donor.trim());
+                stmt.setString(3, food.trim());
+                stmt.setInt(4, quantity);
+                stmt.setString(5, location.trim());
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        int id = (int) rs.getLong(1);
+                        return new Donation(id, donor.trim(), food.trim(), quantity, location.trim(), "Available");
+                    }
+                }
+            } catch (SQLException e) {
+                throw new IllegalStateException("Database insertion error: " + e.getMessage(), e);
+            }
+        }
+
+        // 2. File-based fallback persistence
         List<StoredDonation> donations = readDonations();
 
         int nextId = 1;
@@ -182,8 +230,22 @@ public class DonationStore {
         return created.toDonation();
     }
 
-    // Synchronized: only one receiver can claim an available donation.
     public static synchronized boolean claimDonation(int id) {
+        // 1. Neon PostgreSQL persistence: atomic conditional update
+        if (Database.isConfigured()) {
+            String sql = "UPDATE donations SET status = 'CLAIMED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND UPPER(status) = 'AVAILABLE'";
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setLong(1, id);
+                return stmt.executeUpdate() > 0;
+            } catch (SQLException e) {
+                System.err.println("Database claim error: " + e.getMessage());
+                return false;
+            }
+        }
+
+        // 2. File-based fallback persistence
         List<StoredDonation> donations = readDonations();
 
         for (StoredDonation donation : donations) {
@@ -200,9 +262,6 @@ public class DonationStore {
         return false;
     }
 
-    // Donors can update only their own donations.
-    // Allowed transitions: AVAILABLE -> CANCELLED,
-    // CLAIMED -> COMPLETED. Repeating the current status is harmless.
     public static synchronized boolean updateStatus(
             int id, String newStatus, long ownerId) {
 
@@ -218,6 +277,36 @@ public class DonationStore {
             return false;
         }
 
+        // 1. Neon PostgreSQL persistence
+        if (Database.isConfigured()) {
+            String sql = """
+                UPDATE donations
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND owner_id = ?
+                  AND (
+                    (UPPER(status) = 'AVAILABLE' AND ? = 'CANCELLED')
+                    OR (UPPER(status) = 'CLAIMED' AND ? = 'COMPLETED')
+                    OR UPPER(status) = ?
+                  )
+            """;
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setString(1, requested);
+                stmt.setLong(2, id);
+                stmt.setLong(3, ownerId);
+                stmt.setString(4, requested);
+                stmt.setString(5, requested);
+                stmt.setString(6, requested);
+
+                return stmt.executeUpdate() > 0;
+            } catch (SQLException e) {
+                System.err.println("Database status update error: " + e.getMessage());
+                return false;
+            }
+        }
+
+        // 2. File-based fallback persistence
         List<StoredDonation> donations = readDonations();
 
         for (StoredDonation donation : donations) {
@@ -225,7 +314,6 @@ public class DonationStore {
                 continue;
             }
 
-            // Includes legacy records with ownerId == 0.
             if (donation.ownerId != ownerId) {
                 return false;
             }

@@ -1,4 +1,3 @@
-
 package com.foodbridge.server;
 
 import java.io.IOException;
@@ -12,6 +11,10 @@ import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -166,6 +169,41 @@ public class AuthStore {
                     "Choose Donor or Receiver.");
         }
 
+        String passwordHash = hashPassword(password);
+
+        // 1. Database persistence (Neon PostgreSQL)
+        if (Database.isConfigured()) {
+            String checkSql = "SELECT id FROM users WHERE email = ?";
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+
+                checkStmt.setString(1, email);
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (rs.next()) {
+                        throw new IllegalArgumentException(
+                                "An account with this email already exists.");
+                    }
+                }
+
+                String insertSql = "INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?) RETURNING id";
+                try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                    insertStmt.setString(1, fullName);
+                    insertStmt.setString(2, email);
+                    insertStmt.setString(3, passwordHash);
+                    insertStmt.setString(4, role);
+                    try (ResultSet rs = insertStmt.executeQuery()) {
+                        if (rs.next()) {
+                            long generatedId = rs.getLong(1);
+                            return new User(generatedId, fullName, email, role);
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                throw new IllegalStateException("Database registration error: " + e.getMessage(), e);
+            }
+        }
+
+        // 2. File-based fallback persistence
         List<StoredUser> users = readUsers();
 
         for (StoredUser user : users) {
@@ -179,8 +217,6 @@ public class AuthStore {
                 .mapToLong(user -> user.id)
                 .max()
                 .orElse(0L) + 1L;
-
-        String passwordHash = hashPassword(password);
 
         StoredUser newUser = new StoredUser(
                 nextId, fullName, email, role, passwordHash);
@@ -203,6 +239,33 @@ public class AuthStore {
 
         email = email.trim().toLowerCase(Locale.ROOT);
 
+        // 1. Database persistence (Neon PostgreSQL)
+        if (Database.isConfigured()) {
+            String querySql = "SELECT id, full_name, email, password_hash, role FROM users WHERE email = ?";
+            try (Connection conn = Database.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(querySql)) {
+
+                stmt.setString(1, email);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        String storedHash = rs.getString("password_hash");
+                        if (verifyPassword(password, storedHash)) {
+                            return new User(
+                                    rs.getLong("id"),
+                                    rs.getString("full_name"),
+                                    rs.getString("email"),
+                                    rs.getString("role")
+                            );
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                System.err.println("Database login error: " + e.getMessage());
+            }
+            return null;
+        }
+
+        // 2. File-based fallback persistence
         for (StoredUser user : readUsers()) {
             if (user.email.equals(email)
                     && verifyPassword(password, user.passwordHash)) {
