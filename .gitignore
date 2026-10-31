@@ -4,11 +4,11 @@ target/
 *.class
 *.jar
 
-# Backups and temporary files
+# Backups, local runtime data & temporary files
 backup/
+data/
 *.bak
 *.tmp
-data/*.tmp
 
 # Secrets and local configuration
 .env
