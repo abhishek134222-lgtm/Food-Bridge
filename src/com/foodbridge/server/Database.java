@@ -1,5 +1,6 @@
 package com.foodbridge.server;
 
+import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -9,6 +10,8 @@ import java.sql.Statement;
 public class Database {
 
     private static String configuredJdbcUrl = null;
+    private static String dbUser = null;
+    private static String dbPassword = null;
     private static boolean driverAvailable = false;
     private static boolean isInitialized = false;
 
@@ -21,6 +24,10 @@ public class Database {
         }
     }
 
+    public static void main(String[] args) {
+        init();
+    }
+
     public static synchronized void init() {
         if (isInitialized) return;
 
@@ -30,10 +37,11 @@ public class Database {
         }
 
         if (dbUrl != null && !dbUrl.isBlank() && driverAvailable) {
-            configuredJdbcUrl = formatJdbcUrl(dbUrl);
+            parseConnectionConfig(dbUrl);
             try (Connection conn = getConnection()) {
                 if (conn != null && !conn.isClosed()) {
-                    System.out.println("Connected to Neon PostgreSQL database.");
+                    System.out.println("Connected to Neon PostgreSQL database ("
+                            + conn.getMetaData().getDatabaseProductVersion() + ").");
                     initSchema(conn);
                     seedInitialData(conn);
                 }
@@ -60,25 +68,57 @@ public class Database {
         if (configuredJdbcUrl == null) {
             throw new SQLException("Database is not configured. DATABASE_URL environment variable is missing.");
         }
+        if (dbUser != null && dbPassword != null) {
+            return DriverManager.getConnection(configuredJdbcUrl, dbUser, dbPassword);
+        }
         return DriverManager.getConnection(configuredJdbcUrl);
     }
 
-    private static String formatJdbcUrl(String url) {
-        String clean = url.trim();
+    private static void parseConnectionConfig(String raw) {
+        try {
+            String clean = raw.trim();
 
-        if (clean.startsWith("postgres://")) {
-            clean = "jdbc:postgresql://" + clean.substring("postgres://".length());
-        } else if (clean.startsWith("postgresql://")) {
-            clean = "jdbc:postgresql://" + clean.substring("postgresql://".length());
-        } else if (!clean.startsWith("jdbc:postgresql://")) {
-            clean = "jdbc:postgresql://" + clean;
+            if (clean.startsWith("jdbc:postgresql://")) {
+                clean = clean.substring("jdbc:".length());
+            } else if (clean.startsWith("postgres://")) {
+                clean = "postgresql://" + clean.substring("postgres://".length());
+            }
+
+            URI uri = new URI(clean);
+
+            if (uri.getUserInfo() != null) {
+                String[] parts = uri.getUserInfo().split(":", 2);
+                dbUser = parts[0];
+                if (parts.length > 1) {
+                    dbPassword = parts[1];
+                }
+            }
+
+            String host = uri.getHost();
+            int port = uri.getPort() > 0 ? uri.getPort() : 5432;
+            String path = uri.getPath();
+
+            if (path == null || path.isBlank()) {
+                path = "/neondb";
+            }
+
+            configuredJdbcUrl = "jdbc:postgresql://" + host + ":" + port + path + "?sslmode=require";
+
+        } catch (Exception e) {
+            // Fallback to basic string prefixing if URI parsing fails
+            String fallback = raw.trim();
+            if (fallback.startsWith("postgres://")) {
+                fallback = "jdbc:postgresql://" + fallback.substring("postgres://".length());
+            } else if (fallback.startsWith("postgresql://")) {
+                fallback = "jdbc:postgresql://" + fallback.substring("postgresql://".length());
+            } else if (!fallback.startsWith("jdbc:postgresql://")) {
+                fallback = "jdbc:postgresql://" + fallback;
+            }
+            if (!fallback.contains("sslmode=")) {
+                fallback += (fallback.contains("?") ? "&" : "?") + "sslmode=require";
+            }
+            configuredJdbcUrl = fallback;
         }
-
-        if (!clean.contains("sslmode=")) {
-            clean += (clean.contains("?") ? "&" : "?") + "sslmode=require";
-        }
-
-        return clean;
     }
 
     private static void initSchema(Connection conn) {
