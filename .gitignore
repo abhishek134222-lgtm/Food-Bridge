@@ -1,7 +1,14 @@
-
-# Compiled Java files
+# Compiled Java files & build artifacts
 out/
+target/
 *.class
+*.jar
+
+# Backups and temporary files
+backup/
+*.bak
+*.tmp
+data/*.tmp
 
 # Secrets and local configuration
 .env
@@ -12,6 +19,7 @@ application-local.properties
 # IDE files
 .vscode/
 .idea/
+*.iml
 
 # Logs
 *.log
