@@ -1,142 +1,245 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#167451">
     <title>FoodBridge | Receiver Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        .dashboard { max-width:1000px; margin:45px auto; padding:20px; }
-        .dash-card { background:white; padding:24px; border-radius:14px; margin:20px 0; }
-        .dash-list { display:grid; gap:14px; }
-        .food-item { background:#f0f7f3; padding:18px; border-radius:10px; }
-        .food-item button, .logout { padding:11px 16px; cursor:pointer; }
-        #notice { white-space:pre-wrap; }
+        .receiver-container {
+            max-width: 1120px;
+            margin: 35px auto 60px;
+            padding: 0 20px;
+        }
+        .receiver-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .receiver-top h1 {
+            margin: 0;
+            font-size: clamp(26px, 3.5vw, 36px);
+            letter-spacing: -1px;
+        }
+        .user-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .claim-card-btn {
+            width: 100%;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
-<header class="header">
-    <nav class="container nav">
-        <a class="brand" href="index.html">FoodBridge</a>
-        <button class="logout" id="logoutButton">Logout</button>
-    </nav>
-</header>
+    <header class="header">
+        <nav class="container nav">
+            <a class="brand" href="index.html" aria-label="FoodBridge home">
+                <span class="brand-icon">FB</span>
+                <span>Food<span class="brand-accent">Bridge</span></span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html">Public Homepage</a>
+                <button id="logoutButton" class="button button-secondary" style="min-height:38px; padding:6px 14px;">
+                    Logout
+                </button>
+            </div>
+        </nav>
+    </header>
 
-<main class="dashboard">
-    <h1>Receiver Dashboard</h1>
-    <p id="welcome">Checking your account...</p>
-    <p id="notice" role="status"></p>
+    <main class="receiver-container">
+        <div class="receiver-top">
+            <div>
+                <span class="eyebrow"><span class="live-dot"></span> RECEIVER PORTAL</span>
+                <h1 id="welcomeHeading">Available Food Donations</h1>
+                <p class="muted" style="margin:6px 0 0; font-size:14px;">
+                    Claim food donations to distribute to people in need or your shelter.
+                </p>
+            </div>
+            <div class="user-badge">
+                <span>♧ Authorized Food Receiver</span>
+            </div>
+        </div>
 
-    <section class="dash-card">
-        <h2>Available Food Donations</h2>
-        <button id="refreshButton" type="button">Refresh Donations</button>
-        <div id="donations" class="dash-list"></div>
-    </section>
-</main>
+        <div class="filter-bar" style="margin-bottom: 20px;">
+            <label class="search-box">
+                <span aria-hidden="true">⌕</span>
+                <input id="searchInput" type="search" placeholder="Filter by food name, donor or pickup location...">
+            </label>
+            <button id="refreshBtn" class="button button-secondary" type="button" style="min-height:48px;">
+                <span aria-hidden="true">↻</span> Refresh
+            </button>
+        </div>
 
-<script>
-const notice = document.getElementById("notice");
+        <p id="receiverMessage" class="message" role="status" aria-live="polite"></p>
 
-async function request(url, options = {}) {
-    const response = await fetch(url, {
-        credentials: "same-origin",
-        ...options,
-        headers: {
-            ...(options.headers || {}),
-            ...(options.body ? {"Content-Type":"application/json"} : {})
-        }
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Request failed");
-    return data;
-}
+        <div id="donationsGrid" class="donation-grid">
+            <div class="empty-state">
+                <div class="empty-icon">⏳</div>
+                <h3>Checking food availability...</h3>
+                <p>Loading the latest community donations.</p>
+            </div>
+        </div>
+    </main>
 
-function showError(error) {
-    notice.textContent = error.message;
-}
+    <script>
+        let currentUser = null;
+        let allAvailable = [];
+        const msg = document.getElementById("receiverMessage");
+        const grid = document.getElementById("donationsGrid");
 
-async function checkUser() {
-    try {
-        const user = await request("/api/me");
-        if (user.role !== "RECEIVER") {
-            window.location.replace(
-                user.role === "DONOR" ? "donor.html" : "auth.html"
-            );
-            return false;
-        }
-        document.getElementById("welcome").textContent =
-            "Welcome, " + user.fullName + "!";
-        return true;
-    } catch (error) {
-        window.location.replace("auth.html");
-        return false;
-    }
-}
-
-async function loadDonations() {
-    try {
-        const donations = await request("/api/donations");
-        const list = document.getElementById("donations");
-        list.replaceChildren();
-
-        const available = donations.filter(d => d.status === "AVAILABLE");
-
-        if (!available.length) {
-            list.textContent = "No available donations at the moment.";
-            return;
+        function showMessage(text, isError = false) {
+            msg.textContent = text;
+            msg.className = "message " + (isError ? "error" : "success");
         }
 
-        available.forEach(d => {
-            const item = document.createElement("div");
-            item.className = "food-item";
-
-            const title = document.createElement("h3");
-            title.textContent = d.food;
-
-            const details = document.createElement("p");
-            details.textContent =
-                "Donor: " + d.donor + " | Quantity: " + d.quantity +
-                " | Pickup: " + d.location;
-
-            const button = document.createElement("button");
-            button.textContent = "Claim Donation";
-            button.addEventListener("click", async () => {
-                button.disabled = true;
-                try {
-                    await request("/api/donations/" + d.id + "/status", {
-                        method: "PUT",
-                        body: JSON.stringify({status:"CLAIMED"})
-                    });
-                    notice.textContent = "Donation claimed successfully!";
-                    await loadDonations();
-                } catch (error) {
-                    showError(error);
-                    button.disabled = false;
+        async function api(path, options = {}) {
+            const res = await fetch(path, {
+                credentials: "include",
+                ...options,
+                headers: {
+                    ...(options.headers || {}),
+                    ...(options.body ? { "Content-Type": "application/json" } : {})
                 }
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Operation failed");
+            return data;
+        }
 
-            item.append(title, details, button);
-            list.appendChild(item);
+        async function checkAuth() {
+            try {
+                currentUser = await api("/api/me");
+                if (currentUser.role !== "RECEIVER") {
+                    window.location.replace(currentUser.role === "DONOR" ? "donor.html" : "auth.html");
+                    return false;
+                }
+                document.getElementById("welcomeHeading").textContent = `Welcome, ${currentUser.fullName}!`;
+                return true;
+            } catch (e) {
+                window.location.replace("auth.html");
+                return false;
+            }
+        }
+
+        function getFoodEmoji(name = "") {
+            const t = name.toLowerCase();
+            if (/fruit|apple|banana|mango|orange|grape/.test(t)) return "🍎";
+            if (/veg|carrot|potato|salad|spinach/.test(t)) return "🥗";
+            if (/bread|biscuit|pastry|cake|roti/.test(t)) return "🍞";
+            if (/rice|biryani|pulao|noodle|pasta/.test(t)) return "🍚";
+            if (/meal|dinner|lunch|curry|thali/.test(t)) return "🍱";
+            return "🍲";
+        }
+
+        function renderList() {
+            const filter = document.getElementById("searchInput").value.trim().toLowerCase();
+            const filtered = allAvailable.filter(d => {
+                const combined = `${d.food} ${d.donor} ${d.location}`.toLowerCase();
+                return combined.includes(filter);
+            });
+
+            grid.innerHTML = "";
+
+            if (!filtered.length) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🥗</div>
+                        <h3>No Available Food Found</h3>
+                        <p>${allAvailable.length ? "Try adjusting your search criteria." : "There are currently no unclaimed donations available. Check back soon!"}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(d => {
+                const card = document.createElement("article");
+                card.className = "donation-card";
+
+                card.innerHTML = `
+                    <div class="card-top">
+                        <span class="food-symbol" aria-hidden="true">${getFoodEmoji(d.food)}</span>
+                        <span class="status status-available">Ready to Claim</span>
+                    </div>
+                    <h3>${d.food}</h3>
+                    <p class="card-donor">Shared by <strong>${d.donor}</strong></p>
+                    <div class="card-divider"></div>
+                    <div class="card-detail">
+                        <span class="detail-icon">♧</span>
+                        <div>
+                            <span class="detail-label">QUANTITY</span>
+                            <span class="detail-value">${d.quantity} servings / items</span>
+                        </div>
+                    </div>
+                    <div class="card-detail">
+                        <span class="detail-icon">⌖</span>
+                        <div>
+                            <span class="detail-label">PICKUP ADDRESS</span>
+                            <span class="detail-value">${d.location}</span>
+                        </div>
+                    </div>
+                    <button class="button button-primary claim-card-btn" onclick="claimDonation(${d.id}, '${d.food.replace(/'/g, "\\'")}')">
+                        Claim Donation →
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function loadAvailable() {
+            try {
+                const list = await api("/api/donations");
+                allAvailable = list.filter(d => (d.status || "").toUpperCase() === "AVAILABLE");
+                renderList();
+            } catch (err) {
+                showMessage("Could not load donations: " + err.message, true);
+            }
+        }
+
+        async function claimDonation(id, foodTitle) {
+            const confirmed = confirm(`Are you sure you want to claim "${foodTitle}"?\n\nYou will be designated as the pickup receiver for this food donation.`);
+            if (!confirmed) return;
+
+            try {
+                await api(`/api/donations/${id}/status`, {
+                    method: "PUT",
+                    body: JSON.stringify({ status: "CLAIMED" })
+                });
+
+                showMessage(`Successfully claimed "${foodTitle}"! Please coordinate pickup with the donor.`);
+                await loadAvailable();
+            } catch (err) {
+                showMessage(err.message, true);
+            }
+        }
+
+        document.getElementById("searchInput").addEventListener("input", renderList);
+        document.getElementById("refreshBtn").addEventListener("click", loadAvailable);
+
+        document.getElementById("logoutButton").addEventListener("click", async () => {
+            try {
+                await api("/api/logout", { method: "POST" });
+            } finally {
+                window.location.replace("index.html");
+            }
         });
-    } catch (error) {
-        showError(error);
-    }
-}
 
-document.getElementById("refreshButton").addEventListener("click", loadDonations);
-
-document.getElementById("logoutButton").addEventListener("click", async () => {
-    try {
-        await request("/api/logout", {method:"POST"});
-    } finally {
-        window.location.replace("auth.html");
-    }
-});
-
-(async () => {
-    if (await checkUser()) await loadDonations();
-})();
-</script>
+        (async () => {
+            if (await checkAuth()) {
+                await loadAvailable();
+            }
+        })();
+    </script>
 </body>
 </html>

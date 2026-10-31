@@ -1,286 +1,282 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#116149">
-    <title>FoodBridge | Login & Registration</title>
-
+    <meta name="theme-color" content="#167451">
+    <title>FoodBridge | Login & Register</title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        * {
-            box-sizing: border-box;
+        .auth-container {
+            max-width: 980px;
+            margin: 40px auto 60px;
+            padding: 0 20px;
         }
-
-        body {
-            margin: 0;
-            padding: 30px 16px;
-            font-family: Arial, sans-serif;
-            background: #f0f7f3;
-            color: #183b30;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 20px auto;
-        }
-
-        .brand {
+        .auth-header {
             text-align: center;
-            color: #116149;
-            font-size: 30px;
-            font-weight: bold;
+            margin-bottom: 35px;
         }
-
-        .subtitle {
-            text-align: center;
-            color: #61736b;
-            line-height: 1.6;
+        .auth-header h1 {
+            font-size: clamp(30px, 4vw, 42px);
+            margin: 10px 0 8px;
+            letter-spacing: -1px;
         }
-
-        .forms {
+        .auth-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 24px;
-            margin-top: 30px;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
         }
-
-        .card {
+        .auth-card {
             background: white;
-            padding: 28px;
-            border-radius: 14px;
-            box-shadow: 0 5px 20px #173b3012;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 30px rgba(22, 62, 39, 0.04);
         }
-
-        h2 {
-            margin-top: 0;
-            color: #116149;
+        .auth-card h2 {
+            margin: 0 0 6px;
+            font-size: 22px;
+            color: var(--text);
+            letter-spacing: -0.5px;
         }
-
-        label {
-            display: block;
-            margin: 16px 0 7px;
-            font-weight: bold;
+        .auth-card p.subtitle {
+            margin: 0 0 22px;
+            font-size: 13px;
+            color: var(--muted);
         }
-
-        input, select {
-            width: 100%;
+        .auth-form {
+            display: grid;
+            gap: 16px;
+        }
+        .role-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .role-option {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             padding: 12px;
-            border: 1px solid #cbd9d1;
-            border-radius: 7px;
-            font-size: 15px;
-            background: white;
-        }
-
-        input:focus, select:focus {
-            outline: 2px solid #75b69d;
-            border-color: #116149;
-        }
-
-        button {
-            width: 100%;
-            margin-top: 22px;
-            padding: 13px;
-            border: 0;
-            border-radius: 7px;
-            background: #116149;
-            color: white;
-            font-size: 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
             cursor: pointer;
+            font-size: 13px;
+            font-weight: 650;
+            color: var(--text);
+            transition: all 0.2s;
         }
-
-        button:hover {
-            background: #0b4936;
+        .role-option input {
+            display: none;
         }
-
-        button:disabled {
-            opacity: 0.6;
-            cursor: wait;
+        .role-option.active {
+            border-color: var(--green);
+            background: var(--green-light);
+            color: var(--green-dark);
         }
-
-        #message {
-            min-height: 24px;
-            margin-top: 22px;
-            text-align: center;
-            overflow-wrap: anywhere;
+        .alert-box {
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            display: none;
         }
-
-        .home {
+        .alert-box.error {
             display: block;
-            text-align: center;
-            margin-top: 25px;
-            color: #116149;
-            text-decoration: none;
+            background: #ffebeb;
+            color: #a62d2d;
+            border: 1px solid #f5c2c2;
         }
-
-        .home:hover {
-            text-decoration: underline;
+        .alert-box.success {
+            display: block;
+            background: #e5f5e9;
+            color: #176b40;
+            border: 1px solid #bce8c5;
         }
-
-        @media (max-width: 650px) {
-            .forms {
+        @media (max-width: 768px) {
+            .auth-grid {
                 grid-template-columns: 1fr;
-            }
-
-            .card {
-                padding: 22px;
             }
         }
     </style>
 </head>
-
 <body>
-    <main class="container">
-        <div class="brand">FoodBridge</div>
+    <header class="header">
+        <nav class="container nav">
+            <a class="brand" href="index.html" aria-label="FoodBridge home">
+                <span class="brand-icon">FB</span>
+                <span>Food<span class="brand-accent">Bridge</span></span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html">← Back to Home</a>
+            </div>
+        </nav>
+    </header>
 
-        <p class="subtitle">
-            Share food. Reduce waste. Help your community.
-        </p>
-
-        <div class="forms">
-            <!-- REGISTRATION FORM -->
-            <section class="card">
-                <h2>Create Account</h2>
-
-                <form id="registerForm">
-                    <label for="fullName">Full name</label>
-                    <input id="fullName" name="fullName"
-                           type="text" required maxlength="100"
-                           autocomplete="name"
-                           placeholder="Enter your full name">
-
-                    <label for="regEmail">Email address</label>
-                    <input id="regEmail" name="email"
-                           type="email" required maxlength="255"
-                           autocomplete="email"
-                           placeholder="you@example.com">
-
-                    <label for="regPassword">Password</label>
-                    <input id="regPassword" name="password"
-                           type="password" required minlength="8"
-                           autocomplete="new-password"
-                           placeholder="At least 8 characters">
-
-                    <label for="role">Register as</label>
-                    <select id="role" name="role" required>
-                        <option value="DONOR">Food Donor</option>
-                        <option value="RECEIVER">Food Receiver</option>
-                    </select>
-
-                    <button id="registerButton" type="submit">
-                        Create Account
-                    </button>
-                </form>
-            </section>
-
-            <!-- LOGIN FORM -->
-            <section class="card">
-                <h2>Login</h2>
-
-                <form id="loginForm">
-                    <label for="loginEmail">Email address</label>
-                    <input id="loginEmail" name="email"
-                           type="email" required
-                           autocomplete="username"
-                           placeholder="Enter your email">
-
-                    <label for="loginPassword">Password</label>
-                    <input id="loginPassword" name="password"
-                           type="password" required
-                           autocomplete="current-password"
-                           placeholder="Enter your password">
-
-                    <button id="loginButton" type="submit">
-                        Login
-                    </button>
-                </form>
-
-                <p class="subtitle">
-                    New to FoodBridge? Create your account using the
-                    registration form.
-                </p>
-            </section>
+    <main class="auth-container">
+        <div class="auth-header">
+            <span class="eyebrow"><span class="live-dot"></span> SECURE ACCESS</span>
+            <h1>Join the FoodBridge Mission</h1>
+            <p class="muted">Connect with local communities to share food and eliminate waste.</p>
         </div>
 
-        <p id="message" role="status" aria-live="polite"></p>
+        <div id="globalAlert" class="alert-box" role="status" aria-live="polite"></div>
 
-        <a class="home" href="index.html">
-            ← Back to homepage
-        </a>
+        <div class="auth-grid">
+            <!-- LOGIN CARD -->
+            <section class="auth-card">
+                <h2>Welcome Back</h2>
+                <p class="subtitle">Log in to manage your donations or claims.</p>
+
+                <form id="loginForm" class="auth-form">
+                    <div class="form-field">
+                        <label for="loginEmail">Email Address</label>
+                        <input id="loginEmail" name="email" type="email" required
+                               autocomplete="username" placeholder="you@example.com">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="loginPassword">Password</label>
+                        <input id="loginPassword" name="password" type="password" required
+                               autocomplete="current-password" placeholder="Enter your password">
+                    </div>
+
+                    <button id="loginButton" type="submit" class="button button-primary">
+                        Sign In →
+                    </button>
+                </form>
+            </section>
+
+            <!-- REGISTER CARD -->
+            <section class="auth-card">
+                <h2>Create an Account</h2>
+                <p class="subtitle">Join as a food donor or authorized receiver.</p>
+
+                <form id="registerForm" class="auth-form">
+                    <div class="form-field">
+                        <label for="fullName">Full Name</label>
+                        <input id="fullName" name="fullName" type="text" required maxlength="100"
+                               autocomplete="name" placeholder="e.g. Sarah Jenkins">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="regEmail">Email Address</label>
+                        <input id="regEmail" name="email" type="email" required maxlength="255"
+                               autocomplete="email" placeholder="you@example.com">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="regPassword">Password</label>
+                        <input id="regPassword" name="password" type="password" required minlength="8"
+                               autocomplete="new-password" placeholder="At least 8 characters">
+                    </div>
+
+                    <div class="form-field">
+                        <label>Register As</label>
+                        <div class="role-selector">
+                            <label class="role-option active" id="donorOption">
+                                <input type="radio" name="role" value="DONOR" checked>
+                                <span>♡ Food Donor</span>
+                            </label>
+                            <label class="role-option" id="receiverOption">
+                                <input type="radio" name="role" value="RECEIVER">
+                                <span>♧ Food Receiver</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button id="registerButton" type="submit" class="button button-primary">
+                        Create Account →
+                    </button>
+                </form>
+            </section>
+        </div>
     </main>
 
     <script>
-        const message = document.getElementById("message");
+        const alertBox = document.getElementById("globalAlert");
 
-        async function sendRequest(url, data, buttonId) {
-            const button = document.getElementById(buttonId);
-            const originalText = button.textContent;
+        function showAlert(text, type = "error") {
+            alertBox.textContent = text;
+            alertBox.className = "alert-box " + type;
+            alertBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
 
-            button.disabled = true;
-            button.textContent = "Please wait...";
-            message.textContent = "";
+        // Role option styling toggle
+        const donorOption = document.getElementById("donorOption");
+        const receiverOption = document.getElementById("receiverOption");
+
+        donorOption.addEventListener("click", () => {
+            donorOption.classList.add("active");
+            receiverOption.classList.remove("active");
+        });
+
+        receiverOption.addEventListener("click", () => {
+            receiverOption.classList.add("active");
+            donorOption.classList.remove("active");
+        });
+
+        async function submitAuth(url, payload, buttonId) {
+            const btn = document.getElementById(buttonId);
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Verifying...";
+            alertBox.className = "alert-box";
 
             try {
                 const response = await fetch(url, {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    credentials: "same-origin",
-                    body: JSON.stringify(data)
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(payload)
                 });
 
-                const result = await response.json();
+                const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
-                    throw new Error(
-                        result.error || result.message || "Request failed"
-                    );
+                    throw new Error(data.error || "Authentication failed. Please check your credentials.");
                 }
 
-                message.textContent =
-                    result.message ||
-                    (result.user
-                        ? "Welcome, " + result.user.fullName + "!"
-                        : "Request successful!");
+                showAlert(`Welcome, ${data.fullName || "Friend"}! Redirecting...`, "success");
 
-                if (url === "/api/register" || url === "/api/login") {
-                    setTimeout(() => {
+                setTimeout(() => {
+                    if (data.role === "DONOR") {
+                        window.location.href = "donor.html";
+                    } else if (data.role === "RECEIVER") {
+                        window.location.href = "receiver.html";
+                    } else {
                         window.location.href = "index.html";
-                    }, 1200);
-                }
-            } catch (error) {
-                message.textContent = "Error: " + error.message;
-            } finally {
-                button.disabled = false;
-                button.textContent = originalText;
+                    }
+                }, 900);
+
+            } catch (err) {
+                showAlert(err.message === "Failed to fetch" ? "Cannot connect to server. Is the Java backend running?" : err.message, "error");
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         }
 
-        document.getElementById("registerForm")
-            .addEventListener("submit", function(event) {
-                event.preventDefault();
+        document.getElementById("loginForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            submitAuth("/api/login", {
+                email: document.getElementById("loginEmail").value.trim(),
+                password: document.getElementById("loginPassword").value
+            }, "loginButton");
+        });
 
-                sendRequest("/api/register", {
-                    fullName: document.getElementById("fullName")
-                        .value.trim(),
-                    email: document.getElementById("regEmail")
-                        .value.trim(),
-                    password: document.getElementById("regPassword").value,
-                    role: document.getElementById("role").value
-                }, "registerButton");
-            });
-
-        document.getElementById("loginForm")
-            .addEventListener("submit", function(event) {
-                event.preventDefault();
-
-                sendRequest("/api/login", {
-                    email: document.getElementById("loginEmail")
-                        .value.trim(),
-                    password: document.getElementById("loginPassword").value
-                }, "loginButton");
-            });
+        document.getElementById("registerForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const selectedRole = document.querySelector('input[name="role"]:checked')?.value || "DONOR";
+            submitAuth("/api/register", {
+                fullName: document.getElementById("fullName").value.trim(),
+                email: document.getElementById("regEmail").value.trim(),
+                password: document.getElementById("regPassword").value,
+                role: selectedRole
+            }, "registerButton");
+        });
     </script>
 </body>
 </html>

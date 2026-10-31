@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:8080/api/donations";
+// FoodBridge Client-side Application Logic
+const API_BASE = window.FOODBRIDGE_API_URL || "";
+const API_URL = `${API_BASE}/api/donations`;
 
 const donationList = document.getElementById("donations");
 const message = document.getElementById("message");
@@ -10,6 +12,7 @@ const submitButton = document.getElementById("submitButton");
 
 let allDonations = [];
 let isLoading = false;
+let loggedInUser = null;
 
 function showMessage(text, type = "") {
   message.textContent = text;
@@ -42,30 +45,12 @@ function getStatusLabel(status) {
 function getFoodEmoji(food) {
   const text = String(food || "").toLowerCase();
 
-  if (/fruit|apple|banana|mango|orange|grape/.test(text)) {
-    return "🍎";
-  }
-
-  if (/vegetable|veggie|carrot|potato|spinach|salad/.test(text)) {
-    return "🥗";
-  }
-
-  if (/bread|cake|biscuit|cookie|pastry/.test(text)) {
-    return "🍞";
-  }
-
-  if (/rice|biryani|pasta|noodle/.test(text)) {
-    return "🍚";
-  }
-
-  if (/milk|juice|water|drink/.test(text)) {
-    return "🥤";
-  }
-
-  if (/meal|food|lunch|dinner|cooked|curry/.test(text)) {
-    return "🍱";
-  }
-
+  if (/fruit|apple|banana|mango|orange|grape/.test(text)) return "🍎";
+  if (/vegetable|veggie|carrot|potato|spinach|salad/.test(text)) return "🥗";
+  if (/bread|cake|biscuit|cookie|pastry|roti/.test(text)) return "🍞";
+  if (/rice|biryani|pasta|noodle|pulao/.test(text)) return "🍚";
+  if (/milk|juice|water|drink|tea|coffee/.test(text)) return "🥤";
+  if (/meal|food|lunch|dinner|cooked|curry|thali/.test(text)) return "🍱";
   return "🍲";
 }
 
@@ -119,7 +104,6 @@ function createDonationCard(donation) {
   };
 
   status.classList.add(statusClasses[normalizedStatus] || "status-available");
-
   status.textContent = getStatusLabel(normalizedStatus);
 
   top.append(foodSymbol, status);
@@ -137,7 +121,7 @@ function createDonationCard(donation) {
   const quantity = createDetail(
     "♧",
     "QUANTITY",
-    String(donation.quantity ?? "Not specified"),
+    String(donation.quantity ?? "Not specified") + " servings / units",
   );
 
   const location = createDetail(
@@ -152,23 +136,27 @@ function createDonationCard(donation) {
     const claimButton = document.createElement("button");
     claimButton.type = "button";
     claimButton.className = "button button-primary claim-button";
+    claimButton.style.width = "100%";
+    claimButton.style.marginTop = "14px";
     claimButton.textContent = "Claim Donation →";
 
     claimButton.addEventListener("click", async () => {
       if (claimButton.disabled) return;
 
+      if (!loggedInUser) {
+        if (confirm("You must be logged in as an authorized Food Receiver to claim donations.\n\nGo to the Login / Register page now?")) {
+          window.location.href = "auth.html";
+        }
+        return;
+      }
+
+      if (loggedInUser.role !== "RECEIVER") {
+        alert("Only registered Food Receivers can claim donations. Your current account role is: " + loggedInUser.role);
+        return;
+      }
+
       const confirmed = window.confirm(
-        "Confirm Donation Claim\n\n" +
-          "Food: " +
-          donation.food +
-          "\n" +
-          "Quantity: " +
-          donation.quantity +
-          "\n" +
-          "Pickup location: " +
-          donation.location +
-          "\n\n" +
-          "Are you sure you want to claim this donation?",
+        `Confirm Donation Claim:\n\nFood: ${donation.food}\nQuantity: ${donation.quantity}\nPickup: ${donation.location}\n\nDo you want to reserve this donation?`
       );
 
       if (!confirmed) return;
@@ -182,6 +170,7 @@ function createDonationCard(donation) {
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include",
           body: JSON.stringify({ status: "CLAIMED" }),
         });
 
@@ -194,7 +183,7 @@ function createDonationCard(donation) {
         }
 
         await loadDonations();
-        showMessage("Donation claimed successfully!", "success");
+        showMessage("Donation claimed successfully! Please coordinate pickup.", "success");
       } catch (error) {
         showMessage(
           error.message === "Failed to fetch"
@@ -250,7 +239,6 @@ function renderDonations() {
       .toLowerCase();
 
     const matchesSearch = searchableText.includes(searchTerm);
-
     const matchesStatus =
       selectedStatus === "ALL" ||
       normalizeStatus(donation.status) === selectedStatus;
@@ -288,9 +276,7 @@ function renderDonations() {
 }
 
 async function loadDonations() {
-  if (isLoading) {
-    return;
-  }
+  if (isLoading) return;
 
   isLoading = true;
   refreshButton.disabled = true;
@@ -309,7 +295,7 @@ async function loadDonations() {
   donationList.appendChild(loading);
 
   try {
-    const response = await fetch(API_URL);
+    const response = await fetch(API_URL, { credentials: "include" });
 
     if (!response.ok) {
       throw new Error("Could not load donations.");
@@ -342,6 +328,39 @@ async function loadDonations() {
   }
 }
 
+// Check logged in user to update navbar and prefill donor fields
+async function checkUserNav() {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, { credentials: "include" });
+    if (res.ok) {
+      loggedInUser = await res.json();
+      const navLinks = document.querySelector(".nav-links");
+      if (navLinks && loggedInUser && loggedInUser.fullName) {
+        const dashPage = loggedInUser.role === "DONOR" ? "donor.html" : "receiver.html";
+        navLinks.innerHTML = `
+          <a href="${dashPage}"><strong>${loggedInUser.fullName}</strong> (${loggedInUser.role})</a>
+          <a href="#donations-section">Donations</a>
+          <a class="nav-cta" href="${dashPage}">Go to Dashboard ↗</a>
+          <button id="logoutNavBtn" class="button button-secondary" style="min-height:36px; padding:6px 14px; font-size:12px;">Logout</button>
+        `;
+
+        document.getElementById("logoutNavBtn")?.addEventListener("click", async () => {
+          await fetch(`${API_BASE}/api/logout`, { method: "POST", credentials: "include" });
+          window.location.reload();
+        });
+
+        // Prefill donor form if logged in as donor
+        const donorInput = document.getElementById("donor");
+        if (donorInput && loggedInUser.role === "DONOR") {
+          donorInput.value = loggedInUser.fullName;
+        }
+      }
+    }
+  } catch (e) {
+    // Guest visitor
+  }
+}
+
 searchInput.addEventListener("input", renderDonations);
 statusFilter.addEventListener("change", renderDonations);
 refreshButton.addEventListener("click", loadDonations);
@@ -349,12 +368,22 @@ refreshButton.addEventListener("click", loadDonations);
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  if (submitButton.disabled) {
+  if (submitButton.disabled) return;
+
+  if (!loggedInUser) {
+    if (confirm("You must be logged in as a registered Food Donor to publish a food donation.\n\nGo to the Login / Register page now?")) {
+      window.location.href = "auth.html";
+    }
+    return;
+  }
+
+  if (loggedInUser.role !== "DONOR") {
+    alert("Only registered Food Donors can list donations. Your account role is: " + loggedInUser.role);
     return;
   }
 
   const data = {
-    donor: form.elements.donor.value.trim(),
+    donor: form.elements.donor.value.trim() || loggedInUser.fullName,
     food: form.elements.food.value.trim(),
     quantity: Number(form.elements.quantity.value),
     location: form.elements.location.value.trim(),
@@ -382,6 +411,7 @@ form.addEventListener("submit", async (event) => {
       headers: {
         "Content-Type": "application/json",
       },
+      credentials: "include",
       body: JSON.stringify(data),
     });
 
@@ -394,10 +424,13 @@ form.addEventListener("submit", async (event) => {
     }
 
     form.reset();
+    if (loggedInUser && loggedInUser.role === "DONOR") {
+      document.getElementById("donor").value = loggedInUser.fullName;
+    }
 
     await loadDonations();
 
-    showMessage("Donation submitted successfully!", "success");
+    showMessage("Donation submitted successfully! Thank you for sharing.", "success");
 
     document.getElementById("donations-section").scrollIntoView({
       behavior: "smooth",
@@ -416,4 +449,6 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+// Initialize on page load
+checkUserNav();
 loadDonations();

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#167451">
+    <title>FoodBridge | Donor Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .dash-container {
+            max-width: 1100px;
+            margin: 35px auto 60px;
+            padding: 0 20px;
+        }
+        .dash-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .dash-top h1 {
+            margin: 0;
+            font-size: clamp(26px, 3.5vw, 36px);
+            letter-spacing: -1px;
+        }
+        .user-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: var(--green-light);
+            color: var(--green-dark);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(22, 62, 39, 0.02);
+        }
+        .stat-card .label {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--green);
+            margin: 6px 0 2px;
+        }
+        .dash-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 28px;
+            align-items: start;
+        }
+        .panel {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 26px;
+            box-shadow: 0 4px 20px rgba(22, 62, 39, 0.03);
+        }
+        .panel-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .panel-heading h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        .table-wrap {
+            overflow-x: auto;
+        }
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+        .styled-table th {
+            padding: 12px 14px;
+            background: #f4f8f5;
+            color: var(--text);
+            font-weight: 700;
+            border-bottom: 1px solid var(--border);
+        }
+        .styled-table td {
+            padding: 14px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+        .styled-table tr:hover td {
+            background: #fafdfa;
+        }
+        .btn-action {
+            padding: 6px 11px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 7px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: white;
+            transition: all 0.2s;
+        }
+        .btn-action.complete {
+            background: #e6efff;
+            color: #2954a3;
+            border-color: #c4d7fc;
+        }
+        .btn-action.complete:hover {
+            background: #2954a3;
+            color: white;
+        }
+        .btn-action.cancel {
+            background: #ffebeb;
+            color: #a62d2d;
+            border-color: #f7c3c3;
+        }
+        .btn-action.cancel:hover {
+            background: #a62d2d;
+            color: white;
+        }
+        @media (max-width: 900px) {
+            .dash-layout {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <nav class="container nav">
+            <a class="brand" href="index.html" aria-label="FoodBridge home">
+                <span class="brand-icon">FB</span>
+                <span>Food<span class="brand-accent">Bridge</span></span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html">Public Listings</a>
+                <button id="logoutButton" class="button button-secondary" style="min-height:38px; padding:6px 14px;">
+                    Logout
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dash-container">
+        <div class="dash-top">
+            <div>
+                <span class="eyebrow"><span class="live-dot"></span> DONOR PORTAL</span>
+                <h1 id="welcomeTitle">Welcome, Food Hero</h1>
+            </div>
+            <div id="userRoleBadge" class="user-badge">
+                <span>♡ Food Donor</span>
+            </div>
+        </div>
+
+        <p id="dashMessage" class="message" role="status" aria-live="polite"></p>
+
+        <!-- STATS ROW -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Donations</div>
+                <div class="value" id="statTotal">0</div>
+                <span class="muted" style="font-size:11px;">All listings</span>
+            </div>
+            <div class="stat-card">
+                <div class="label">Available</div>
+                <div class="value" id="statAvailable">0</div>
+                <span class="muted" style="font-size:11px;">Ready for pickup</span>
+            </div>
+            <div class="stat-card">
+                <div class="label">Claimed</div>
+                <div class="value" id="statClaimed">0</div>
+                <span class="muted" style="font-size:11px;">Reserved by receiver</span>
+            </div>
+            <div class="stat-card">
+                <div class="label">Completed</div>
+                <div class="value" id="statCompleted">0</div>
+                <span class="muted" style="font-size:11px;">Successfully shared</span>
+            </div>
+        </div>
+
+        <div class="dash-layout">
+            <!-- DONATION LIST PANEL -->
+            <section class="panel">
+                <div class="panel-heading">
+                    <h2>Community Food Listings</h2>
+                    <button id="refreshBtn" class="button button-secondary" style="min-height:36px; padding:6px 12px;">
+                        ↻ Refresh
+                    </button>
+                </div>
+                <div class="table-wrap">
+                    <table class="styled-table">
+                        <thead>
+                            <tr>
+                                <th>Food Item</th>
+                                <th>Quantity</th>
+                                <th>Pickup Location</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="donationsBody">
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding:30px;" class="muted">
+                                    Loading donations...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- CREATE DONATION FORM PANEL -->
+            <section class="panel">
+                <div class="panel-heading">
+                    <h2>Share New Food</h2>
+                </div>
+                <p class="muted" style="font-size:13px; margin:-10px 0 18px;">
+                    Enter the details of surplus food you wish to donate.
+                </p>
+
+                <form id="addDonationForm" style="display:grid; gap:14px;">
+                    <div class="form-field">
+                        <label for="foodName">Food Description</label>
+                        <input id="foodName" name="food" required maxlength="100"
+                               placeholder="e.g. 50 Cooked Meals, Fresh Veggies">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="foodQuantity">Quantity (Servings or Units)</label>
+                        <input id="foodQuantity" name="quantity" type="number" required min="1" max="100000"
+                               placeholder="e.g. 25">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="pickupLocation">Pickup Location</label>
+                        <input id="pickupLocation" name="location" required maxlength="255"
+                               placeholder="e.g. Sector 14 Community Center, Panchkula">
+                    </div>
+
+                    <button id="submitDonationBtn" type="submit" class="button button-primary" style="margin-top:8px;">
+                        Publish Donation ↗
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        let currentUser = null;
+        const msg = document.getElementById("dashMessage");
+
+        function showStatus(text, isError = false) {
+            msg.textContent = text;
+            msg.className = "message " + (isError ? "error" : "success");
+        }
+
+        async function api(path, options = {}) {
+            const res = await fetch(path, {
+                credentials: "include",
+                ...options,
+                headers: {
+                    ...(options.headers || {}),
+                    ...(options.body ? { "Content-Type": "application/json" } : {})
+                }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Operation failed");
+            return data;
+        }
+
+        async function checkAuth() {
+            try {
+                currentUser = await api("/api/me");
+                if (currentUser.role !== "DONOR") {
+                    window.location.replace(currentUser.role === "RECEIVER" ? "receiver.html" : "auth.html");
+                    return false;
+                }
+                document.getElementById("welcomeTitle").textContent = `Welcome, ${currentUser.fullName}!`;
+                return true;
+            } catch (e) {
+                window.location.replace("auth.html");
+                return false;
+            }
+        }
+
+        async function loadDonations() {
+            try {
+                const list = await api("/api/donations");
+                const tbody = document.getElementById("donationsBody");
+                tbody.innerHTML = "";
+
+                let total = list.length;
+                let available = 0;
+                let claimed = 0;
+                let completed = 0;
+
+                list.forEach(d => {
+                    const st = (d.status || "AVAILABLE").toUpperCase();
+                    if (st === "AVAILABLE") available++;
+                    else if (st === "CLAIMED") claimed++;
+                    else if (st === "COMPLETED") completed++;
+                });
+
+                document.getElementById("statTotal").textContent = total;
+                document.getElementById("statAvailable").textContent = available;
+                document.getElementById("statClaimed").textContent = claimed;
+                document.getElementById("statCompleted").textContent = completed;
+
+                if (!list.length) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px;" class="muted">No donations listed yet. Be the first to share!</td></tr>`;
+                    return;
+                }
+
+                list.forEach(d => {
+                    const tr = document.createElement("tr");
+                    const st = (d.status || "AVAILABLE").toUpperCase();
+
+                    let statusClass = "status-available";
+                    if (st === "CLAIMED") statusClass = "status-claimed";
+                    else if (st === "COMPLETED") statusClass = "status-completed";
+                    else if (st === "CANCELLED") statusClass = "status-cancelled";
+
+                    let actionHtml = `<span class="muted" style="font-size:11px;">—</span>`;
+                    // If donor owns or can update
+                    if (st === "CLAIMED") {
+                        actionHtml = `<button class="btn-action complete" onclick="updateStatus(${d.id}, 'COMPLETED')">Mark Completed ✓</button>`;
+                    } else if (st === "AVAILABLE") {
+                        actionHtml = `<button class="btn-action cancel" onclick="updateStatus(${d.id}, 'CANCELLED')">Cancel</button>`;
+                    }
+
+                    tr.innerHTML = `
+                        <td><strong>${d.food}</strong><br><small class="muted">by ${d.donor}</small></td>
+                        <td>${d.quantity}</td>
+                        <td>${d.location}</td>
+                        <td><span class="status ${statusClass}">${d.status}</span></td>
+                        <td>${actionHtml}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (err) {
+                showStatus("Could not load donations: " + err.message, true);
+            }
+        }
+
+        async function updateStatus(id, newStatus) {
+            if (!confirm(`Are you sure you want to mark this donation as ${newStatus}?`)) return;
+            try {
+                await api(`/api/donations/${id}/status`, {
+                    method: "PUT",
+                    body: JSON.stringify({ status: newStatus })
+                });
+                showStatus(`Donation #${id} marked as ${newStatus}.`);
+                await loadDonations();
+            } catch (e) {
+                showStatus(e.message, true);
+            }
+        }
+
+        document.getElementById("addDonationForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById("submitDonationBtn");
+            btn.disabled = true;
+            btn.textContent = "Publishing...";
+
+            try {
+                await api("/api/donations", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        food: document.getElementById("foodName").value.trim(),
+                        quantity: Number(document.getElementById("foodQuantity").value),
+                        location: document.getElementById("pickupLocation").value.trim()
+                    })
+                });
+
+                showStatus("Donation added successfully! Thank you for sharing.");
+                e.target.reset();
+                await loadDonations();
+            } catch (err) {
+                showStatus(err.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Publish Donation ↗";
+            }
+        });
+
+        document.getElementById("refreshBtn").addEventListener("click", loadDonations);
+
+        document.getElementById("logoutButton").addEventListener("click", async () => {
+            try {
+                await api("/api/logout", { method: "POST" });
+            } finally {
+                window.location.replace("index.html");
+            }
+        });
+
+        (async () => {
+            if (await checkAuth()) {
+                await loadDonations();
+            }
+        })();
+    </script>
+</body>
+</html>
