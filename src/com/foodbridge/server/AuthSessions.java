@@ -1,4 +1,3 @@
-
 package com.foodbridge.server;
 
 import java.security.SecureRandom;
@@ -7,10 +6,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthSessions {
 
-    private static final SecureRandom RANDOM =
-            new SecureRandom();
+    private static final SecureRandom RANDOM = new SecureRandom();
+    // Default session validity: 7 days
+    private static final long SESSION_TTL_MS = 7L * 24 * 60 * 60 * 1000L;
 
-    private static final ConcurrentHashMap<String, AuthStore.User>
+    private record SessionEntry(AuthStore.User user, long expiresAt) {}
+
+    private static final ConcurrentHashMap<String, SessionEntry>
             SESSIONS = new ConcurrentHashMap<>();
 
     // Create a session after successful login or registration
@@ -22,18 +24,29 @@ public class AuthSessions {
                 .withoutPadding()
                 .encodeToString(bytes);
 
-        SESSIONS.put(token, user);
+        long expiresAt = System.currentTimeMillis() + SESSION_TTL_MS;
+        SESSIONS.put(token, new SessionEntry(user, expiresAt));
 
         return token;
     }
 
-    // Find the user associated with a session token
+    // Find the user associated with a session token if not expired
     public static AuthStore.User get(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
 
-        return SESSIONS.get(token);
+        SessionEntry entry = SESSIONS.get(token);
+        if (entry == null) {
+            return null;
+        }
+
+        if (System.currentTimeMillis() > entry.expiresAt()) {
+            SESSIONS.remove(token);
+            return null;
+        }
+
+        return entry.user();
     }
 
     // Remove the session during logout

@@ -1,4 +1,3 @@
-
 package com.foodbridge.server;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -9,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -32,6 +32,7 @@ public class Server {
         HttpServer server = HttpServer.create(
                 new InetSocketAddress("0.0.0.0", port), 0);
 
+        server.createContext("/api/health", Server::handleHealth);
         server.createContext("/api/donations", Server::handleDonations);
         server.createContext("/api/register", Server::handleRegister);
         server.createContext("/api/login", Server::handleLogin);
@@ -47,10 +48,51 @@ public class Server {
                 "Open http://localhost:" + port + " in your browser.");
     }
 
-    // ---------------- WEBSITE ----------------
+    // ---------------- CORS AND SECURITY ----------------
+
+    private static boolean applyCors(HttpExchange exchange) throws IOException {
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+
+        if (origin != null && !origin.isBlank()) {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+            exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie, X-Requested-With, Accept");
+            exchange.getResponseHeaders().set("Access-Control-Max-Age", "86400");
+        }
+
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return true;
+        }
+
+        return false;
+    }
+
+    // ---------------- HEALTH CHECK ----------------
+
+    private static void handleHealth(HttpExchange exchange) throws IOException {
+        if (applyCors(exchange)) return;
+
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, "{\"error\":\"Method not allowed\"}");
+            return;
+        }
+
+        String json = "{\"status\":\"UP\","
+                + "\"service\":\"FoodBridge\","
+                + "\"timestamp\":\"" + Instant.now().toString() + "\"}";
+
+        sendJson(exchange, 200, json);
+    }
+
+    // ---------------- WEBSITE STATIC FILES ----------------
 
     private static void handleHome(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405,
@@ -110,6 +152,8 @@ public class Server {
 
     private static void handleDonations(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
@@ -174,7 +218,7 @@ public class Server {
 
             try {
                 Donation donation = DonationStore.add(
-        user.id(), user.fullName(), food, quantity, location);
+                        user.id(), user.fullName(), food, quantity, location);
 
                 sendJson(exchange, 201, toJson(donation));
 
@@ -274,7 +318,7 @@ public class Server {
                 }
 
                 boolean updated =
-        DonationStore.updateStatus(id, status, user.id());
+                        DonationStore.updateStatus(id, status, user.id());
 
                 if (!updated) {
                     sendJson(exchange, 404,
@@ -295,7 +339,7 @@ public class Server {
             return;
         }
 
-        exchange.getResponseHeaders().set("Allow", "GET, POST, PUT");
+        exchange.getResponseHeaders().set("Allow", "GET, POST, PUT, OPTIONS");
         sendJson(exchange, 405,
                 "{\"error\":\"Method not allowed\"}");
     }
@@ -304,6 +348,8 @@ public class Server {
 
     private static void handleRegister(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, "{\"error\":\"POST required\"}");
@@ -325,7 +371,7 @@ public class Server {
 
             String token = AuthSessions.create(user);
             setSessionCookie(exchange, token);
-            sendJson(exchange, 201, userJson(user));
+            sendJson(exchange, 201, userJson(user, token));
 
         } catch (IllegalArgumentException e) {
             sendJson(exchange, 400,
@@ -341,6 +387,8 @@ public class Server {
 
     private static void handleLogin(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, "{\"error\":\"POST required\"}");
@@ -365,7 +413,7 @@ public class Server {
 
             String token = AuthSessions.create(user);
             setSessionCookie(exchange, token);
-            sendJson(exchange, 200, userJson(user));
+            sendJson(exchange, 200, userJson(user, token));
 
         } catch (IllegalStateException e) {
             e.printStackTrace();
@@ -378,6 +426,8 @@ public class Server {
 
     private static void handleMe(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, "{\"error\":\"GET required\"}");
@@ -392,13 +442,15 @@ public class Server {
             return;
         }
 
-        sendJson(exchange, 200, userJson(user));
+        sendJson(exchange, 200, userJson(user, null));
     }
 
     // ---------------- LOGOUT ----------------
 
     private static void handleLogout(HttpExchange exchange)
             throws IOException {
+
+        if (applyCors(exchange)) return;
 
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, "{\"error\":\"POST required\"}");
@@ -407,9 +459,11 @@ public class Server {
 
         AuthSessions.remove(sessionToken(exchange));
 
-        String cookie = "FBSESSION=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
+        String cookie = "FBSESSION=; Path=/; HttpOnly; Max-Age=0";
         if (isHttps(exchange)) {
-            cookie += "; Secure";
+            cookie += "; SameSite=None; Secure";
+        } else {
+            cookie += "; SameSite=Lax";
         }
 
         exchange.getResponseHeaders().add("Set-Cookie", cookie);
@@ -421,11 +475,12 @@ public class Server {
     private static void setSessionCookie(
             HttpExchange exchange, String token) {
 
-        String cookie = "FBSESSION=" + token
-                + "; Path=/; HttpOnly; SameSite=Strict";
+        String cookie = "FBSESSION=" + token + "; Path=/; HttpOnly";
 
         if (isHttps(exchange)) {
-            cookie += "; Secure";
+            cookie += "; SameSite=None; Secure";
+        } else {
+            cookie += "; SameSite=Lax";
         }
 
         exchange.getResponseHeaders().add("Set-Cookie", cookie);
@@ -439,9 +494,17 @@ public class Server {
     }
 
     private static String sessionToken(HttpExchange exchange) {
-        List<String> cookies =
-                exchange.getRequestHeaders().get("Cookie");
+        // 1. Check Authorization Bearer header
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String token = authHeader.substring(7).trim();
+            if (!token.isEmpty()) {
+                return token;
+            }
+        }
 
+        // 2. Check Cookie header
+        List<String> cookies = exchange.getRequestHeaders().get("Cookie");
         if (cookies == null) {
             return null;
         }
@@ -449,7 +512,6 @@ public class Server {
         for (String header : cookies) {
             for (String cookie : header.split(";")) {
                 String item = cookie.trim();
-
                 if (item.startsWith("FBSESSION=")) {
                     return item.substring("FBSESSION=".length());
                 }
@@ -463,11 +525,18 @@ public class Server {
         return AuthSessions.get(sessionToken(exchange));
     }
 
-    private static String userJson(AuthStore.User user) {
-        return "{\"id\":" + user.id()
+    private static String userJson(AuthStore.User user, String token) {
+        String json = "{\"id\":" + user.id()
                 + ",\"fullName\":\"" + escape(user.fullName())
                 + "\",\"email\":\"" + escape(user.email())
-                + "\",\"role\":\"" + escape(user.role()) + "\"}";
+                + "\",\"role\":\"" + escape(user.role()) + "\"";
+
+        if (token != null && !token.isBlank()) {
+            json += ",\"token\":\"" + escape(token) + "\"";
+        }
+
+        json += "}";
+        return json;
     }
 
     // ---------------- JSON HELPERS ----------------
