@@ -1,5 +1,5 @@
 // FoodBridge Client-side Application Logic
-const API_BASE = window.FOODBRIDGE_API_URL || "";
+const API_BASE = window.FOODBRIDGE_API_URL || "https://foodbridge-backend-wnpw.onrender.com";
 const API_URL = `${API_BASE}/api/donations`;
 
 const donationList = document.getElementById("donations");
