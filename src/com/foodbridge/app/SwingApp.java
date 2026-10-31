@@ -1,4 +1,3 @@
-
 package com.foodbridge.app;
 
 import javax.swing.*;
@@ -18,8 +17,11 @@ import java.util.regex.Pattern;
 
 public class SwingApp extends JFrame {
 
-    private static final String API =
-            "http://localhost:8080/api/donations";
+    private String serverBase = "http://localhost:8080";
+    private String sessionCookie = null;
+    private String currentUserName = null;
+    private String currentUserRole = null;
+    private String currentUserEmail = null;
 
     private static final Color GREEN = new Color(43, 119, 78);
     private static final Color DARK = new Color(22, 49, 37);
@@ -60,6 +62,8 @@ public class SwingApp extends JFrame {
     private final JLabel dashboardStatus =
             new JLabel("Loading donation data...");
 
+    private final JLabel userStatusBadge = new JLabel("👤 Guest (Not signed in)");
+
     // Donation form fields
     private final JTextField donorField = new JTextField();
     private final JTextField foodField = new JTextField();
@@ -80,6 +84,7 @@ public class SwingApp extends JFrame {
 
     private final JButton dashboardNav;
     private final JButton donationsNav;
+    private final JButton accountNav;
 
     private final JTable donationsTable = new JTable(tableModel);
 
@@ -99,6 +104,16 @@ public class SwingApp extends JFrame {
 
     private List<DonationRow> donations = new ArrayList<>();
 
+    // Account view dynamic elements
+    private final JPanel accountCardContainer = new JPanel(new CardLayout());
+    private final JTextField loginEmailField = new JTextField();
+    private final JPasswordField loginPasswordField = new JPasswordField();
+    private final JTextField regNameField = new JTextField();
+    private final JTextField regEmailField = new JTextField();
+    private final JPasswordField regPasswordField = new JPasswordField();
+    private final JComboBox<String> regRoleCombo = new JComboBox<>(new String[]{"DONOR", "RECEIVER"});
+    private final JLabel accountStatusLabel = new JLabel(" ");
+
     public SwingApp() {
         setTitle("FoodBridge | Donation Management");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -109,6 +124,7 @@ public class SwingApp extends JFrame {
 
         dashboardNav = createNavButton("▦   Dashboard", true);
         donationsNav = createNavButton("♡   Food Donations", false);
+        accountNav = createNavButton("👤   Account / Login", false);
 
         buildInterface();
         loadDonations();
@@ -123,7 +139,7 @@ public class SwingApp extends JFrame {
         // Sidebar
         JPanel sidebar = new JPanel();
         sidebar.setBackground(DARK);
-        sidebar.setPreferredSize(new Dimension(235, 0));
+        sidebar.setPreferredSize(new Dimension(245, 0));
         sidebar.setBorder(
                 BorderFactory.createEmptyBorder(28, 17, 22, 17));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
@@ -138,35 +154,70 @@ public class SwingApp extends JFrame {
         tagline.setFont(new Font("SansSerif", Font.PLAIN, 13));
         tagline.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        userStatusBadge.setForeground(new Color(205, 230, 215));
+        userStatusBadge.setFont(new Font("SansSerif", Font.BOLD, 12));
+        userStatusBadge.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         sidebar.add(logo);
         sidebar.add(Box.createVerticalStrut(5));
         sidebar.add(tagline);
-        sidebar.add(Box.createVerticalStrut(38));
+        sidebar.add(Box.createVerticalStrut(15));
+        sidebar.add(userStatusBadge);
+        sidebar.add(Box.createVerticalStrut(28));
 
         dashboardNav.addActionListener(e -> showPage("dashboard"));
         donationsNav.addActionListener(e -> showPage("donations"));
+        accountNav.addActionListener(e -> showPage("account"));
 
         sidebar.add(dashboardNav);
         sidebar.add(Box.createVerticalStrut(9));
         sidebar.add(donationsNav);
+        sidebar.add(Box.createVerticalStrut(9));
+        sidebar.add(accountNav);
         sidebar.add(Box.createVerticalGlue());
+
+        JButton serverConfigBtn = new JButton("⚙ " + serverBase);
+        serverConfigBtn.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        serverConfigBtn.setForeground(new Color(177, 204, 185));
+        serverConfigBtn.setBackground(DARK);
+        serverConfigBtn.setBorderPainted(false);
+        serverConfigBtn.setFocusPainted(false);
+        serverConfigBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        serverConfigBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        serverConfigBtn.addActionListener(e -> promptChangeServer());
 
         JLabel footer = new JLabel(
                 "<html><b>Reducing waste,</b><br>sharing hope.</html>");
         footer.setForeground(new Color(177, 204, 185));
         footer.setFont(new Font("SansSerif", Font.PLAIN, 12));
         footer.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        sidebar.add(serverConfigBtn);
+        sidebar.add(Box.createVerticalStrut(10));
         sidebar.add(footer);
 
         // Main pages
         pagePanel.setOpaque(false);
         pagePanel.add(buildDashboardPage(), "dashboard");
         pagePanel.add(buildDonationsPage(), "donations");
+        pagePanel.add(buildAccountPage(), "account");
 
         root.add(sidebar, BorderLayout.WEST);
         root.add(pagePanel, BorderLayout.CENTER);
 
         setContentPane(root);
+    }
+
+    private void promptChangeServer() {
+        String input = JOptionPane.showInputDialog(
+                this,
+                "Enter FoodBridge Backend API URL:\n(e.g., http://localhost:8080 or your deployed HTTPS URL)",
+                serverBase);
+
+        if (input != null && !input.trim().isBlank()) {
+            serverBase = input.trim().replaceAll("/+$", "");
+            loadDonations();
+        }
     }
 
     // Dashboard page
@@ -228,7 +279,6 @@ public class SwingApp extends JFrame {
         recentHeader.add(recentTitle, BorderLayout.WEST);
         recentHeader.add(refresh, BorderLayout.EAST);
 
-        // Separate dashboard table view using the same data model
         JTable recentTable = new JTable(tableModel);
         styleTable(recentTable);
 
@@ -316,7 +366,6 @@ public class SwingApp extends JFrame {
         donationSorter = new TableRowSorter<>(tableModel);
         donationsTable.setRowSorter(donationSorter);
 
-        // Apply search whenever text changes
         searchField.getDocument().addDocumentListener(
                 new DocumentListener() {
 
@@ -336,7 +385,6 @@ public class SwingApp extends JFrame {
                     }
                 });
 
-        // Apply filter whenever status selection changes
         filterStatus.addActionListener(
                 e -> applyDonationFilter());
 
@@ -372,7 +420,7 @@ public class SwingApp extends JFrame {
         JPanel formCard = cardPanel();
         formCard.setLayout(new BorderLayout(0, 13));
 
-        JLabel formTitle = new JLabel("Create a donation");
+        JLabel formTitle = new JLabel("Create a food donation");
         formTitle.setFont(new Font("SansSerif", Font.BOLD, 18));
 
         JPanel fields = new JPanel(new GridLayout(1, 4, 12, 0));
@@ -415,6 +463,297 @@ public class SwingApp extends JFrame {
         return page;
     }
 
+    // Account Page (Login / Register / Profile)
+    private JPanel buildAccountPage() {
+        JPanel page = pageContainer();
+
+        JLabel title = pageTitle("Account & Authentication");
+        JLabel subtitle = new JLabel("Log in or register to publish and claim donations.");
+        subtitle.setForeground(MUTED);
+
+        JPanel heading = new JPanel();
+        heading.setOpaque(false);
+        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
+        heading.add(title);
+        heading.add(Box.createVerticalStrut(7));
+        heading.add(subtitle);
+
+        // Sub-panel 1: Auth Forms (Not Logged In)
+        JPanel authFormsPanel = new JPanel(new GridLayout(1, 2, 24, 0));
+        authFormsPanel.setOpaque(false);
+
+        // Sign In Card
+        JPanel loginCard = cardPanel();
+        loginCard.setLayout(new BoxLayout(loginCard, BoxLayout.Y_AXIS));
+        JLabel loginTitle = new JLabel("Sign In");
+        loginTitle.setFont(new Font("SansSerif", Font.BOLD, 20));
+        loginTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel loginSub = new JLabel("Access your FoodBridge account.");
+        loginSub.setForeground(MUTED);
+        loginSub.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        loginSub.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        styleInput(loginEmailField);
+        loginEmailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        loginPasswordField.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        loginPasswordField.setPreferredSize(new Dimension(120, 38));
+        loginPasswordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        loginPasswordField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(207, 219, 209)),
+                BorderFactory.createEmptyBorder(8, 9, 8, 9)));
+
+        JButton signInBtn = primaryButton("Sign In →");
+        signInBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        signInBtn.addActionListener(e -> performLogin());
+
+        loginCard.add(loginTitle);
+        loginCard.add(Box.createVerticalStrut(5));
+        loginCard.add(loginSub);
+        loginCard.add(Box.createVerticalStrut(20));
+        loginCard.add(createFieldWrapper("Email address", loginEmailField));
+        loginCard.add(Box.createVerticalStrut(12));
+        loginCard.add(createFieldWrapper("Password", loginPasswordField));
+        loginCard.add(Box.createVerticalStrut(20));
+        loginCard.add(signInBtn);
+        loginCard.add(Box.createVerticalGlue());
+
+        // Register Card
+        JPanel regCard = cardPanel();
+        regCard.setLayout(new BoxLayout(regCard, BoxLayout.Y_AXIS));
+        JLabel regTitle = new JLabel("Create Account");
+        regTitle.setFont(new Font("SansSerif", Font.BOLD, 20));
+        regTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel regSub = new JLabel("Register as a Food Donor or Receiver.");
+        regSub.setForeground(MUTED);
+        regSub.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        regSub.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        styleInput(regNameField);
+        regNameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        styleInput(regEmailField);
+        regEmailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+
+        regPasswordField.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        regPasswordField.setPreferredSize(new Dimension(120, 38));
+        regPasswordField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        regPasswordField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(207, 219, 209)),
+                BorderFactory.createEmptyBorder(8, 9, 8, 9)));
+
+        regRoleCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+
+        JButton registerBtn = primaryButton("Register Account →");
+        registerBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        registerBtn.addActionListener(e -> performRegister());
+
+        regCard.add(regTitle);
+        regCard.add(Box.createVerticalStrut(5));
+        regCard.add(regSub);
+        regCard.add(Box.createVerticalStrut(20));
+        regCard.add(createFieldWrapper("Full name", regNameField));
+        regCard.add(Box.createVerticalStrut(12));
+        regCard.add(createFieldWrapper("Email address", regEmailField));
+        regCard.add(Box.createVerticalStrut(12));
+        regCard.add(createFieldWrapper("Password (min 8 chars)", regPasswordField));
+        regCard.add(Box.createVerticalStrut(12));
+        regCard.add(createFieldWrapper("Register as", regRoleCombo));
+        regCard.add(Box.createVerticalStrut(20));
+        regCard.add(registerBtn);
+        regCard.add(Box.createVerticalGlue());
+
+        authFormsPanel.add(loginCard);
+        authFormsPanel.add(regCard);
+
+        // Sub-panel 2: Profile (Logged In)
+        JPanel profilePanel = cardPanel();
+        profilePanel.setLayout(new BoxLayout(profilePanel, BoxLayout.Y_AXIS));
+
+        JLabel profTitle = new JLabel("Your Account Profile");
+        profTitle.setFont(new Font("SansSerif", Font.BOLD, 22));
+        profTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel profileDetails = new JLabel("You are currently signed in.");
+        profileDetails.setForeground(MUTED);
+        profileDetails.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        profileDetails.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JButton logoutBtn = new JButton("Sign Out");
+        logoutBtn.setBackground(new Color(180, 40, 40));
+        logoutBtn.setForeground(WHITE);
+        logoutBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        logoutBtn.setBorderPainted(false);
+        logoutBtn.setFocusPainted(false);
+        logoutBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        logoutBtn.addActionListener(e -> performLogout());
+
+        profilePanel.add(profTitle);
+        profilePanel.add(Box.createVerticalStrut(15));
+        profilePanel.add(profileDetails);
+        profilePanel.add(Box.createVerticalStrut(25));
+        profilePanel.add(logoutBtn);
+        profilePanel.add(Box.createVerticalGlue());
+
+        accountCardContainer.setOpaque(false);
+        accountCardContainer.add(authFormsPanel, "forms");
+        accountCardContainer.add(profilePanel, "profile");
+
+        accountStatusLabel.setForeground(MUTED);
+        accountStatusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        page.add(heading, BorderLayout.NORTH);
+        page.add(accountCardContainer, BorderLayout.CENTER);
+        page.add(accountStatusLabel, BorderLayout.SOUTH);
+
+        return page;
+    }
+
+    private JPanel createFieldWrapper(String labelText, JComponent input) {
+        JPanel wrapper = new JPanel(new BorderLayout(0, 5));
+        wrapper.setOpaque(false);
+        JLabel label = new JLabel(labelText);
+        label.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        label.setForeground(MUTED);
+        wrapper.add(label, BorderLayout.NORTH);
+        wrapper.add(input, BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private void performLogin() {
+        String email = loginEmailField.getText().trim();
+        String pass = new String(loginPasswordField.getPassword());
+
+        if (email.isEmpty() || pass.isEmpty()) {
+            accountStatusLabel.setText("Please enter your email and password.");
+            return;
+        }
+
+        accountStatusLabel.setText("Signing in...");
+
+        new SwingWorker<HttpResponse<String>, Void>() {
+            @Override
+            protected HttpResponse<String> doInBackground() throws Exception {
+                String json = "{\"email\":\"" + escape(email) + "\",\"password\":\"" + escape(pass) + "\"}";
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(serverBase + "/api/login"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build();
+                return client.send(request, HttpResponse.BodyHandlers.ofString());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    HttpResponse<String> response = get();
+                    if (response.statusCode() == 200) {
+                        String cookieHeader = response.headers().firstValue("Set-Cookie").orElse(null);
+                        if (cookieHeader != null) {
+                            sessionCookie = cookieHeader.split(";")[0];
+                        }
+                        String body = response.body();
+                        currentUserName = getValue(body, "fullName");
+                        currentUserEmail = getValue(body, "email");
+                        currentUserRole = getValue(body, "role");
+
+                        onAuthSuccess();
+                    } else {
+                        String err = getValue(response.body(), "error");
+                        accountStatusLabel.setText(err.isEmpty() ? "Invalid email or password." : err);
+                        JOptionPane.showMessageDialog(SwingApp.this, "Sign in failed: " + (err.isEmpty() ? "Invalid credentials" : err), "Login Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    accountStatusLabel.setText("Sign in failed. Check server connection.");
+                }
+            }
+        }.execute();
+    }
+
+    private void performRegister() {
+        String name = regNameField.getText().trim();
+        String email = regEmailField.getText().trim();
+        String pass = new String(regPasswordField.getPassword());
+        String role = (String) regRoleCombo.getSelectedItem();
+
+        if (name.isEmpty() || email.isEmpty() || pass.isEmpty()) {
+            accountStatusLabel.setText("Please fill out all registration fields.");
+            return;
+        }
+
+        accountStatusLabel.setText("Registering account...");
+
+        new SwingWorker<HttpResponse<String>, Void>() {
+            @Override
+            protected HttpResponse<String> doInBackground() throws Exception {
+                String json = "{\"fullName\":\"" + escape(name)
+                        + "\",\"email\":\"" + escape(email)
+                        + "\",\"password\":\"" + escape(pass)
+                        + "\",\"role\":\"" + escape(role) + "\"}";
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(serverBase + "/api/register"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build();
+                return client.send(request, HttpResponse.BodyHandlers.ofString());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    HttpResponse<String> response = get();
+                    if (response.statusCode() == 201) {
+                        String cookieHeader = response.headers().firstValue("Set-Cookie").orElse(null);
+                        if (cookieHeader != null) {
+                            sessionCookie = cookieHeader.split(";")[0];
+                        }
+                        String body = response.body();
+                        currentUserName = getValue(body, "fullName");
+                        currentUserEmail = getValue(body, "email");
+                        currentUserRole = getValue(body, "role");
+
+                        onAuthSuccess();
+                    } else {
+                        String err = getValue(response.body(), "error");
+                        accountStatusLabel.setText(err.isEmpty() ? "Registration rejected." : err);
+                        JOptionPane.showMessageDialog(SwingApp.this, "Registration failed: " + err, "Registration Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    accountStatusLabel.setText("Registration failed. Check server connection.");
+                }
+            }
+        }.execute();
+    }
+
+    private void onAuthSuccess() {
+        userStatusBadge.setText("👤 " + currentUserName + " (" + currentUserRole + ")");
+        accountStatusLabel.setText("Signed in as " + currentUserName);
+        donorField.setText(currentUserName);
+
+        CardLayout cl = (CardLayout) accountCardContainer.getLayout();
+        cl.show(accountCardContainer, "profile");
+
+        JOptionPane.showMessageDialog(this, "Welcome to FoodBridge, " + currentUserName + "!\nYou are signed in as: " + currentUserRole, "Authenticated", JOptionPane.INFORMATION_MESSAGE);
+        showPage("donations");
+    }
+
+    private void performLogout() {
+        sessionCookie = null;
+        currentUserName = null;
+        currentUserRole = null;
+        currentUserEmail = null;
+
+        userStatusBadge.setText("👤 Guest (Not signed in)");
+        donorField.setText("");
+        loginPasswordField.setText("");
+        regPasswordField.setText("");
+
+        CardLayout cl = (CardLayout) accountCardContainer.getLayout();
+        cl.show(accountCardContainer, "forms");
+        accountStatusLabel.setText("Logged out successfully.");
+        showPage("account");
+    }
+
     // Search donations and filter by status
     private void applyDonationFilter() {
 
@@ -429,14 +768,12 @@ public class SwingApp extends JFrame {
         List<RowFilter<Object, Object>> filters =
                 new ArrayList<>();
 
-        // Search donor, food, quantity, and location columns
         if (!search.isEmpty()) {
             filters.add(RowFilter.regexFilter(
                     "(?i)" + Pattern.quote(search),
                     1, 2, 3, 4));
         }
 
-        // Filter by the selected donation status
         if (selectedStatus != null
                 && !"All Statuses".equals(selectedStatus)) {
 
@@ -453,7 +790,6 @@ public class SwingApp extends JFrame {
         }
     }
 
-    // Create page layout
     private JPanel pageContainer() {
 
         JPanel panel = new JPanel(new BorderLayout(0, 22));
@@ -463,7 +799,6 @@ public class SwingApp extends JFrame {
         return panel;
     }
 
-    // Page title style
     private JLabel pageTitle(String text) {
 
         JLabel label = new JLabel(text);
@@ -472,7 +807,6 @@ public class SwingApp extends JFrame {
         return label;
     }
 
-    // Sidebar button style
     private JButton createNavButton(String text, boolean active) {
 
         JButton button = new JButton(text);
@@ -488,28 +822,33 @@ public class SwingApp extends JFrame {
                 BorderFactory.createEmptyBorder(13, 12, 13, 10));
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
         button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
-        button.setPreferredSize(new Dimension(200, 48));
+        button.setPreferredSize(new Dimension(210, 48));
         button.setCursor(
                 Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return button;
     }
 
-    // Switch between pages
     private void showPage(String page) {
 
         boolean dashboard = "dashboard".equals(page);
+        boolean donationsPage = "donations".equals(page);
+        boolean accountPage = "account".equals(page);
 
         dashboardNav.setBackground(dashboard ? GREEN : DARK);
         dashboardNav.setForeground(dashboard ? WHITE : SIDEBAR_TEXT);
 
-        donationsNav.setBackground(dashboard ? DARK : GREEN);
-        donationsNav.setForeground(dashboard ? SIDEBAR_TEXT : WHITE);
+        donationsNav.setBackground(donationsPage ? GREEN : DARK);
+        donationsNav.setForeground(donationsPage ? WHITE : SIDEBAR_TEXT);
+
+        accountNav.setBackground(accountPage ? GREEN : DARK);
+        accountNav.setForeground(accountPage ? WHITE : SIDEBAR_TEXT);
 
         pageLayout.show(pagePanel, page);
-        loadDonations();
+        if (!accountPage) {
+            loadDonations();
+        }
     }
 
-    // Dashboard statistic card
     private JPanel statCard(
             String title, JLabel value, String detail) {
 
@@ -539,7 +878,6 @@ public class SwingApp extends JFrame {
         return card;
     }
 
-    // White card design
     private JPanel cardPanel() {
 
         JPanel panel = new JPanel();
@@ -548,11 +886,10 @@ public class SwingApp extends JFrame {
                 BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(BORDER),
                         BorderFactory.createEmptyBorder(
-                                12, 10, 12, 10)));
+                                12, 12, 12, 12)));
         return panel;
     }
 
-    // Table styling
     private void styleTable(JTable table) {
 
         table.setRowHeight(34);
@@ -576,7 +913,6 @@ public class SwingApp extends JFrame {
         table.setAutoCreateRowSorter(true);
     }
 
-    // Add a labeled form field
     private void addField(
             JPanel panel, String labelText, JTextField field) {
 
@@ -592,7 +928,6 @@ public class SwingApp extends JFrame {
         panel.add(wrapper);
     }
 
-    // Input field styling
     private void styleInput(JTextField field) {
 
         field.setFont(new Font("SansSerif", Font.PLAIN, 13));
@@ -605,7 +940,6 @@ public class SwingApp extends JFrame {
                                 8, 9, 8, 9)));
     }
 
-    // Create a green button
     private JButton primaryButton(String text) {
 
         JButton button = new JButton(text);
@@ -640,7 +974,7 @@ public class SwingApp extends JFrame {
                     throws Exception {
 
                 HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(API))
+                        .uri(URI.create(serverBase + "/api/donations"))
                         .GET()
                         .build();
 
@@ -674,23 +1008,13 @@ public class SwingApp extends JFrame {
 
                     statusLabel.setText("Could not load donations.");
                     dashboardStatus.setText(
-                            "Could not load donation data. "
-                                    + "Is the Java server running?");
-
-                    JOptionPane.showMessageDialog(
-                            SwingApp.this,
-                            "Cannot load donations. Ensure the Java "
-                                    + "server is running.\n"
-                                    + ex.getMessage(),
-                            "Connection Error",
-                            JOptionPane.ERROR_MESSAGE);
+                            "Could not load donation data. Is the Java server running?");
                 }
             }
 
         }.execute();
     }
 
-    // Update the table and dashboard statistics
     private void updateTableAndStats() {
 
         tableModel.setRowCount(0);
@@ -729,8 +1053,18 @@ public class SwingApp extends JFrame {
         quantityValue.setText(String.valueOf(totalQuantity));
     }
 
-    // Submit a new donation
     private void submitDonation() {
+
+        if (sessionCookie == null) {
+            showError("You must be logged in as a DONOR to publish a donation.\nPlease go to the 'Account / Login' page first.");
+            showPage("account");
+            return;
+        }
+
+        if (!"DONOR".equalsIgnoreCase(currentUserRole)) {
+            showError("Only accounts registered with the 'DONOR' role can create donations.\nYour current role is: " + currentUserRole);
+            return;
+        }
 
         String donor = donorField.getText().trim();
         String food = foodField.getText().trim();
@@ -769,14 +1103,17 @@ public class SwingApp extends JFrame {
             @Override
             protected Integer doInBackground() throws Exception {
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(API))
+                var reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(serverBase + "/api/donations"))
                         .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(json))
-                        .build();
+                        .POST(HttpRequest.BodyPublishers.ofString(json));
+
+                if (sessionCookie != null) {
+                    reqBuilder.header("Cookie", sessionCookie);
+                }
 
                 HttpResponse<String> response = client.send(
-                        request,
+                        reqBuilder.build(),
                         HttpResponse.BodyHandlers.ofString());
 
                 return response.statusCode();
@@ -793,11 +1130,10 @@ public class SwingApp extends JFrame {
                     if (status != 201) {
                         showError(
                                 "The server rejected the donation "
-                                        + "(HTTP " + status + ").");
+                                        + "(HTTP " + status + "). Ensure you are logged in as a Donor.");
                         return;
                     }
 
-                    donorField.setText("");
                     foodField.setText("");
                     quantityField.setText("");
                     locationField.setText("");
@@ -808,15 +1144,20 @@ public class SwingApp extends JFrame {
 
                 } catch (Exception ex) {
                     showError(
-                            "Unable to submit donation. Check the server.");
+                            "Unable to submit donation. Check server connectivity.");
                 }
             }
 
         }.execute();
     }
 
-    // Update the status of the selected donation
     private void updateDonationStatus() {
+
+        if (sessionCookie == null) {
+            showError("Please log in via 'Account / Login' before modifying donation status.");
+            showPage("account");
+            return;
+        }
 
         int selectedViewRow = donationsTable.getSelectedRow();
 
@@ -825,8 +1166,6 @@ public class SwingApp extends JFrame {
             return;
         }
 
-        // Convert view row to model row so filtering and sorting
-        // cannot cause the wrong donation ID to be updated.
         int selectedModelRow =
                 donationsTable.convertRowIndexToModel(selectedViewRow);
 
@@ -851,14 +1190,17 @@ public class SwingApp extends JFrame {
             @Override
             protected Integer doInBackground() throws Exception {
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(API + "/" + donationId + "/status"))
+                var reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(serverBase + "/api/donations/" + donationId + "/status"))
                         .header("Content-Type", "application/json")
-                        .PUT(HttpRequest.BodyPublishers.ofString(json))
-                        .build();
+                        .PUT(HttpRequest.BodyPublishers.ofString(json));
+
+                if (sessionCookie != null) {
+                    reqBuilder.header("Cookie", sessionCookie);
+                }
 
                 HttpResponse<String> response = client.send(
-                        request,
+                        reqBuilder.build(),
                         HttpResponse.BodyHandlers.ofString());
 
                 return response.statusCode();
@@ -876,22 +1218,23 @@ public class SwingApp extends JFrame {
                         statusLabel.setText(
                                 "Donation status updated successfully.");
                         loadDonations();
+                    } else if (responseCode == 403) {
+                        showError("Permission denied: Receivers can claim donations; Donors can complete or cancel their own.");
+                    } else if (responseCode == 409) {
+                        showError("Donation has already been claimed by another user.");
+                        loadDonations();
                     } else {
-                        showError(
-                                "Status update failed (HTTP "
-                                        + responseCode + ").");
+                        showError("Status update failed (HTTP " + responseCode + ").");
                     }
 
                 } catch (Exception ex) {
-                    showError(
-                            "Unable to update status. Check the Java server.");
+                    showError("Unable to update status. Check server connection.");
                 }
             }
 
         }.execute();
     }
 
-    // Read donation data returned by the API
     private List<DonationRow> parseDonations(String json) {
 
         List<DonationRow> result = new ArrayList<>();
@@ -916,7 +1259,6 @@ public class SwingApp extends JFrame {
         return result;
     }
 
-    // Get a value from a JSON object
     private String getValue(String json, String key) {
 
         Pattern pattern = Pattern.compile(
@@ -941,7 +1283,6 @@ public class SwingApp extends JFrame {
                 .replace("\\r", "\r");
     }
 
-    // Escape special characters before sending JSON
     private String escape(String value) {
 
         return value.replace("\\", "\\\\")
@@ -950,7 +1291,6 @@ public class SwingApp extends JFrame {
                 .replace("\r", "\\r");
     }
 
-    // Display an error message
     private void showError(String message) {
 
         statusLabel.setText(message);
@@ -962,7 +1302,6 @@ public class SwingApp extends JFrame {
                 JOptionPane.ERROR_MESSAGE);
     }
 
-    // Donation data model
     private static class DonationRow {
 
         final String id;
@@ -989,7 +1328,6 @@ public class SwingApp extends JFrame {
         }
     }
 
-    // Application entry point
     public static void main(String[] args) {
 
         SwingUtilities.invokeLater(() -> {
@@ -998,7 +1336,6 @@ public class SwingApp extends JFrame {
                 UIManager.setLookAndFeel(
                         UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {
-                // Use the default look and feel.
             }
 
             new SwingApp().setVisible(true);
