@@ -110,7 +110,7 @@ java -cp out com.foodbridge.server.Server
 *The server automatically initializes the database schema and initial records on first startup.*
 
 ---
-#Deployment Backend (Render)
+Deployment Backend (Render)
 ```
 Create a new Web Service on render.com connected to your GitHub repository.
 Select Docker runtime.
