@@ -119,6 +119,8 @@ PORT: 8080
 DATABASE_URL: (Your Neon PostgreSQL connection string)
 CORS_ALLOWED_ORIGINS: https://<your-frontend>.onrender.com,http://localhost:8080
 Deploy the backend and copy your live Render backend URL.
+
+
 Frontend (Render)
 Create a new Static Site on render.com connected to the same GitHub repository.
 Set the Root Directory to web (if your frontend files are inside the web folder).
@@ -127,6 +129,7 @@ Set the Publish Directory to . (if the Root Directory is already set to web).
 Update the backend API URL in web/app.js:
 javascript
 window.FOODBRIDGE_API_URL = "https://<your-backend>.onrender.com";
+
 
 Deploy the frontend.
 Final Configuration
