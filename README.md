@@ -110,22 +110,30 @@ java -cp out com.foodbridge.server.Server
 *The server automatically initializes the database schema and initial records on first startup.*
 
 ---
+Deployment
+Backend (Render)
+Create a new Web Service on render.com connected to your GitHub repository.
+Select Docker runtime.
+Add the following Environment Variables:
+PORT: 8080
+DATABASE_URL: (Your Neon PostgreSQL connection string)
+CORS_ALLOWED_ORIGINS: https://<your-frontend>.onrender.com,http://localhost:8080
+Deploy the backend and copy your live Render backend URL.
+Frontend (Render)
+Create a new Static Site on render.com connected to the same GitHub repository.
+Set the Root Directory to web (if your frontend files are inside the web folder).
+Set the Build Command according to your frontend setup (leave empty if no build is required).
+Set the Publish Directory to . (if the Root Directory is already set to web).
+Update the backend API URL in web/app.js:
+javascript
+window.FOODBRIDGE_API_URL = "https://<your-backend>.onrender.com";
 
-## Deployment
-
-### Backend (Render)
-1. Create a new **Web Service** on [render.com](https://render.com) connected to your GitHub repository.
-2. Select **Docker** runtime.
-3. Add Environment Variables:
-   - `PORT`: `8080`
-   - `DATABASE_URL`: *(Your Neon PostgreSQL connection string)*
-   - `CORS_ALLOWED_ORIGINS`: `https://<your-app>.vercel.app,http://localhost:8080`
-
-### Frontend (Vercel)
-1. Import your GitHub repository on [vercel.com](https://vercel.com).
-2. Deploy directly (Vercel automatically applies `vercel.json`).
-3. Set your live Render backend URL in `web/app.js` or via `window.FOODBRIDGE_API_URL`.
-
+Deploy the frontend.
+Final Configuration
+Backend: Render Web Service
+Frontend: Render Static Site
+Database: Neon PostgreSQL
+Hosting Platform: Render only
 ---
 
 ## License
